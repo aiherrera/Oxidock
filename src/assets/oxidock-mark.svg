@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+  <defs>
+    <linearGradient id="ox-mark-bg" x1="3" y1="3" x2="21" y2="21" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#18e2dc" />
+      <stop offset="1" stop-color="#2ee779" />
+    </linearGradient>
+  </defs>
+  <rect x="1.5" y="1.5" width="21" height="21" rx="6.5" fill="url(#ox-mark-bg)" />
+  <path
+    d="M6 8.3c.8-2.1 2.2-3 3.7-3.4-.6 2-.4 3.5.8 4.5h3c1.2-1 1.4-2.5.8-4.5 1.5.4 2.9 1.3 3.7 3.4"
+    stroke="#f8ffff"
+    stroke-width="1.8"
+    stroke-linecap="round"
+  />
+  <path
+    d="M5 10.1 12 6.4l7 3.7v6.8l-7 3.7-7-3.7v-6.8Z"
+    fill="#0f766e"
+    fill-opacity="0.28"
+    stroke="#f8ffff"
+    stroke-width="1.5"
+    stroke-linejoin="round"
+  />
+  <path
+    d="M12 13.4 19 10M12 13.4v7M12 13.4 5 10"
+    stroke="#eaffff"
+    stroke-width="1.2"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
+</svg>
