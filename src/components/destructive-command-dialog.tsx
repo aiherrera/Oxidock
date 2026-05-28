@@ -1,10 +1,11 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { riskLabels, type DockerCommandMetadata } from "../lib/docker-command-registry";
 import { alertDanger, riskBadgeClasses, statusBadgeDanger } from "../lib/theme-classes";
 
 type DestructiveCommandDialogProps = {
   open: boolean;
   command: string;
+  confirmationPhrase: string;
   reasons: string[];
   registryMatch: DockerCommandMetadata | null;
   onCancel: () => void;
@@ -15,6 +16,7 @@ type DestructiveCommandDialogProps = {
 export function DestructiveCommandDialog({
   open,
   command,
+  confirmationPhrase,
   reasons,
   registryMatch,
   onCancel,
@@ -22,12 +24,23 @@ export function DestructiveCommandDialog({
   onOpenSettings,
 }: DestructiveCommandDialogProps) {
   const cancelRef = useRef<HTMLButtonElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [typed, setTyped] = useState("");
 
   useEffect(() => {
     if (open) {
       cancelRef.current?.focus();
     }
   }, [open]);
+
+  useEffect(() => {
+    if (open) {
+      setTyped("");
+      window.setTimeout(() => inputRef.current?.focus(), 0);
+    } else {
+      setTyped("");
+    }
+  }, [open, command]);
 
   useEffect(() => {
     if (!open) {
@@ -44,13 +57,16 @@ export function DestructiveCommandDialog({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [open, onCancel]);
 
-  if (!open) {
-    return null;
-  }
-
   const label = registryMatch?.label ?? "Destructive command";
   const description =
     registryMatch?.description ?? "This command may delete containers, images, volumes, or other Docker data.";
+
+  const normalizedPhrase = confirmationPhrase.trim();
+  const isPhraseMatched = typed.trim() === normalizedPhrase && normalizedPhrase.length > 0;
+
+  if (!open) {
+    return null;
+  }
 
   return (
     <div
@@ -81,6 +97,34 @@ export function DestructiveCommandDialog({
 
         <p className="mt-3 text-xs leading-5 text-(--text-muted)">{description}</p>
 
+        <div className="mt-4 rounded-lg border border-(--border) bg-(--surface) p-3">
+          <p className="text-xs text-(--text-secondary)">
+            Type{" "}
+            <span className="rounded border border-(--border) bg-(--surface-elevated) px-1.5 py-0.5 font-mono text-[0.7rem] text-(--text-primary)">
+              {normalizedPhrase}
+            </span>{" "}
+            to confirm.
+          </p>
+          <label className="mt-2 block">
+            <span className="sr-only">Confirmation phrase</span>
+            <input
+              ref={inputRef}
+              autoCapitalize="off"
+              autoComplete="off"
+              autoCorrect="off"
+              className="mt-1 w-full rounded-lg border border-(--border) bg-(--surface-elevated) px-3 py-2 font-mono text-xs text-(--text-primary) outline-none focus:border-(--accent)/50 focus:ring-2 focus:ring-(--accent)/25"
+              placeholder={normalizedPhrase}
+              spellCheck={false}
+              type="text"
+              value={typed}
+              onChange={(event) => setTyped(event.target.value)}
+            />
+          </label>
+          <p className="mt-2 text-[0.7rem] leading-5 text-(--text-muted)">
+            This helps prevent accidental destructive actions.
+          </p>
+        </div>
+
         {reasons.length > 0 ? (
           <ul className={`mt-3 list-inside list-disc text-xs leading-5 ${alertDanger}`}>
             {reasons.map((reason) => (
@@ -109,6 +153,7 @@ export function DestructiveCommandDialog({
             className="inline-flex min-h-10 items-center rounded-lg border border-red-500/40 bg-red-500/15 px-4 py-2 text-sm font-medium text-red-100 transition hover:bg-red-500/25"
             type="button"
             onClick={onConfirm}
+            disabled={!isPhraseMatched}
           >
             Run anyway
           </button>

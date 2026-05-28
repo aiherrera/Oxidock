@@ -1,6 +1,7 @@
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, type Dispatch, type SetStateAction } from "react";
 import { ContainersPage } from "./containers-page";
 import { PageLoadingSkeleton } from "./page-shell";
+import type { CliHistoryEntry } from "./cli-playground-page";
 import type { DockerCommandLessonId } from "../lib/docker-command-lessons";
 import type { DockerCommandId } from "../lib/docker-command-registry";
 import type { AppPage } from "../types/app";
@@ -32,9 +33,18 @@ type AppRouterProps = {
   docsLessonId: DockerCommandLessonId;
   docsCommandId?: DockerCommandId;
   imagesViewMode: "local" | "registry";
+  playgroundCommandDraft: string;
+  playgroundErrorMessage: string | null;
+  playgroundHistory: CliHistoryEntry[];
   playgroundCommand?: string;
+  playgroundIsRunning: boolean;
   isLoadingStatus: boolean;
   themePreference: ThemePreference;
+  onPlaygroundCommandDraftChange: Dispatch<SetStateAction<string>>;
+  onPlaygroundErrorMessageChange: Dispatch<SetStateAction<string | null>>;
+  onPlaygroundHistoryChange: Dispatch<SetStateAction<CliHistoryEntry[]>>;
+  onPlaygroundInitialCommandApplied: () => void;
+  onPlaygroundIsRunningChange: Dispatch<SetStateAction<boolean>>;
   onThemePreferenceChange: (preference: ThemePreference) => void;
   onEngineChanged: (revision: number) => void;
   onOpenPlayground: (command: string) => void;
@@ -51,9 +61,18 @@ export function AppRouter({
   docsLessonId,
   docsCommandId,
   imagesViewMode,
+  playgroundCommandDraft,
+  playgroundErrorMessage,
+  playgroundHistory,
   playgroundCommand,
+  playgroundIsRunning,
   isLoadingStatus,
   themePreference,
+  onPlaygroundCommandDraftChange,
+  onPlaygroundErrorMessageChange,
+  onPlaygroundHistoryChange,
+  onPlaygroundInitialCommandApplied,
+  onPlaygroundIsRunningChange,
   onThemePreferenceChange,
   onEngineChanged,
   onOpenPlayground,
@@ -127,8 +146,17 @@ export function AppRouter({
       return (
         <Suspense fallback={<LazyPageFallback />}>
           <CliPlaygroundPage
+            command={playgroundCommandDraft}
             dockerStatus={dockerStatus}
+            errorMessage={playgroundErrorMessage}
+            history={playgroundHistory}
             initialCommand={playgroundCommand}
+            isRunning={playgroundIsRunning}
+            setCommand={onPlaygroundCommandDraftChange}
+            setErrorMessage={onPlaygroundErrorMessageChange}
+            setHistory={onPlaygroundHistoryChange}
+            setIsRunning={onPlaygroundIsRunningChange}
+            onInitialCommandApplied={onPlaygroundInitialCommandApplied}
             onOpenSettingsPage={onOpenSettingsPage}
           />
         </Suspense>

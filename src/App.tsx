@@ -3,6 +3,7 @@ import "./App.css";
 import { AppRouter } from "./components/app-router";
 import { AppShell } from "./components/app-shell";
 import { Sidebar } from "./components/sidebar";
+import type { CliHistoryEntry } from "./components/cli-playground-page";
 import type { TitleBarHandle } from "./components/title-bar";
 import { useAppNavigation } from "./hooks/use-app-navigation";
 import { useAppShortcuts } from "./hooks/use-app-shortcuts";
@@ -31,6 +32,10 @@ function App() {
   const [docsCommandId, setDocsCommandId] = useState<DockerCommandId | undefined>();
   const [imagesViewMode, setImagesViewMode] = useState<"local" | "registry">("local");
   const [playgroundCommand, setPlaygroundCommand] = useState<string>();
+  const [playgroundCommandDraft, setPlaygroundCommandDraft] = useState("docker ps");
+  const [playgroundHistory, setPlaygroundHistory] = useState<CliHistoryEntry[]>([]);
+  const [playgroundIsRunning, setPlaygroundIsRunning] = useState(false);
+  const [playgroundErrorMessage, setPlaygroundErrorMessage] = useState<string | null>(null);
   const preserveSearchOnNextPageRef = useRef(false);
   const [isLoadingStatus, setIsLoadingStatus] = useState(true);
   const [shortcutSettings, setShortcutSettings] = useState<ShortcutSettings>(() => loadShortcutSettings());
@@ -146,10 +151,19 @@ function App() {
       imagesViewMode={imagesViewMode}
       isLoadingStatus={isLoadingStatus}
       playgroundCommand={playgroundCommand}
+      playgroundCommandDraft={playgroundCommandDraft}
+      playgroundErrorMessage={playgroundErrorMessage}
+      playgroundHistory={playgroundHistory}
+      playgroundIsRunning={playgroundIsRunning}
       searchQuery={searchQuery}
       themePreference={themePreference}
       onEngineChanged={handleEngineChanged}
       onOpenPlayground={openPlaygroundWithCommand}
+      onPlaygroundCommandDraftChange={setPlaygroundCommandDraft}
+      onPlaygroundErrorMessageChange={setPlaygroundErrorMessage}
+      onPlaygroundHistoryChange={setPlaygroundHistory}
+      onPlaygroundInitialCommandApplied={() => setPlaygroundCommand(undefined)}
+      onPlaygroundIsRunningChange={setPlaygroundIsRunning}
       onOpenSettingsPage={() => setActivePage("settings")}
       onResetImagesViewMode={resetImagesViewMode}
       onThemePreferenceChange={setThemePreference}

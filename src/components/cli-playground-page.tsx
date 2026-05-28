@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import { PageShell } from "./page-shell";
 import { CliCommandAutocomplete } from "./cli-command-autocomplete";
 import { CliCommandInspector } from "./cli-command-inspector";
 import { DestructiveCommandDialog } from "./destructive-command-dialog";
 import { resolveRegistryCommand } from "../lib/docker-command-resolver";
+import { getDestructiveConfirmationPhrase } from "../lib/destructive-command-confirmation";
 import { loadCliPlaygroundSettings, type CliPlaygroundSettings } from "../lib/cli-playground-settings";
 import { type CommandSuggestion } from "../lib/docker-command-suggestions";
 import { toErrorMessage } from "../lib/search-utils";
@@ -11,7 +12,7 @@ import { alertDanger, alertWarningSubtle, statusBadgeDanger, statusBadgeSuccess 
 import { classifyDockerCommand, runDockerCommand } from "../lib/tauri-docker";
 import type { DockerCommandResult, DockerStatus } from "../types/docker";
 
-type CliHistoryEntry = {
+export type CliHistoryEntry = {
   command: string;
   result: DockerCommandResult;
   ranWithoutProtection?: boolean;
@@ -22,23 +23,54 @@ type PendingDestructiveRun = {
   command: string;
   normalized: string;
   reasons: string[];
+  confirmationPhrase: string;
 };
 
 type CliPlaygroundPageProps = {
+  command?: string;
   dockerStatus: DockerStatus | null;
+  errorMessage?: string | null;
+  history?: CliHistoryEntry[];
   initialCommand?: string;
+  isRunning?: boolean;
+  setCommand?: Dispatch<SetStateAction<string>>;
+  setErrorMessage?: Dispatch<SetStateAction<string | null>>;
+  setHistory?: Dispatch<SetStateAction<CliHistoryEntry[]>>;
+  setIsRunning?: Dispatch<SetStateAction<boolean>>;
   onOpenSettingsPage: () => void;
+  onInitialCommandApplied?: () => void;
 };
 
-export function CliPlaygroundPage({ dockerStatus, initialCommand, onOpenSettingsPage }: CliPlaygroundPageProps) {
-  const [command, setCommand] = useState(() => initialCommand ?? "docker ps");
-  const [history, setHistory] = useState<CliHistoryEntry[]>([]);
-  const [isRunning, setIsRunning] = useState(false);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+export function CliPlaygroundPage({
+  command: controlledCommand,
+  dockerStatus,
+  errorMessage: controlledErrorMessage,
+  history: controlledHistory,
+  initialCommand,
+  isRunning: controlledIsRunning,
+  setCommand: setControlledCommand,
+  setErrorMessage: setControlledErrorMessage,
+  setHistory: setControlledHistory,
+  setIsRunning: setControlledIsRunning,
+  onOpenSettingsPage,
+  onInitialCommandApplied,
+}: CliPlaygroundPageProps) {
+  const [localCommand, setLocalCommand] = useState(() => initialCommand ?? "docker ps");
+  const [localHistory, setLocalHistory] = useState<CliHistoryEntry[]>([]);
+  const [localIsRunning, setLocalIsRunning] = useState(false);
+  const [localErrorMessage, setLocalErrorMessage] = useState<string | null>(null);
   const [highlightedSuggestion, setHighlightedSuggestion] = useState<CommandSuggestion | null>(null);
   const [settings] = useState<CliPlaygroundSettings>(() => loadCliPlaygroundSettings());
   const [pendingDestructiveRun, setPendingDestructiveRun] = useState<PendingDestructiveRun | null>(null);
   const outputRef = useRef<HTMLElement>(null);
+  const command = controlledCommand ?? localCommand;
+  const history = controlledHistory ?? localHistory;
+  const isRunning = controlledIsRunning ?? localIsRunning;
+  const errorMessage = controlledErrorMessage ?? localErrorMessage;
+  const setCommand = setControlledCommand ?? setLocalCommand;
+  const setHistory = setControlledHistory ?? setLocalHistory;
+  const setIsRunning = setControlledIsRunning ?? setLocalIsRunning;
+  const setErrorMessage = setControlledErrorMessage ?? setLocalErrorMessage;
 
   useEffect(() => {
     if (!initialCommand) {
@@ -48,7 +80,8 @@ export function CliPlaygroundPage({ dockerStatus, initialCommand, onOpenSettings
     setCommand(initialCommand);
     setHighlightedSuggestion(null);
     setErrorMessage(null);
-  }, [initialCommand]);
+    onInitialCommandApplied?.();
+  }, [initialCommand, onInitialCommandApplied, setCommand, setErrorMessage]);
 
   const registryMatch = useMemo(() => resolveRegistryCommand(command), [command]);
 
@@ -81,7 +114,7 @@ export function CliPlaygroundPage({ dockerStatus, initialCommand, onOpenSettings
         setIsRunning(false);
       }
     },
-    []
+    [setErrorMessage, setHistory, setIsRunning]
   );
 
   const runCommand = useCallback(async () => {
@@ -104,6 +137,7 @@ export function CliPlaygroundPage({ dockerStatus, initialCommand, onOpenSettings
           command: trimmed,
           normalized: classification.normalized,
           reasons: classification.reasons,
+          confirmationPhrase: getDestructiveConfirmationPhrase(classification.normalized),
         });
         return;
       }
@@ -116,7 +150,7 @@ export function CliPlaygroundPage({ dockerStatus, initialCommand, onOpenSettings
     } catch (error) {
       setErrorMessage(toErrorMessage(error, "Failed to validate docker command."));
     }
-  }, [command, dockerStatus?.isRunning, executeCommand, settings.destructiveProtectionEnabled]);
+  }, [command, dockerStatus?.isRunning, executeCommand, setErrorMessage, settings.destructiveProtectionEnabled]);
 
   useEffect(() => {
     outputRef.current?.scrollIntoView?.({ behavior: "smooth", block: "nearest" });
@@ -266,6 +300,7 @@ export function CliPlaygroundPage({ dockerStatus, initialCommand, onOpenSettings
       <DestructiveCommandDialog
         command={pendingDestructiveRun?.normalized ?? ""}
         open={pendingDestructiveRun !== null}
+        confirmationPhrase={pendingDestructiveRun?.confirmationPhrase ?? "Oxidock"}
         reasons={pendingDestructiveRun?.reasons ?? []}
         registryMatch={pendingDestructiveRun ? resolveRegistryCommand(pendingDestructiveRun.normalized) : null}
         onCancel={() => setPendingDestructiveRun(null)}
