@@ -7,84 +7,44 @@ source "$repo_root/scripts/git-hooks-lib.sh"
 
 cd "$repo_root"
 
-TS_TSX_PATTERN='\.(ts|tsx)$'
-PRETTIER_PATTERN='\.(ts|tsx|js|jsx|json|css|md|ya?ml)$'
-
-not_staged_ts_tsx=($(list_unstaged_files "$TS_TSX_PATTERN"))
-staged_ts_tsx=($(list_staged_files "$TS_TSX_PATTERN"))
-
-not_staged_prettier=($(list_unstaged_files "$PRETTIER_PATTERN"))
-staged_prettier=($(list_staged_files "$PRETTIER_PATTERN"))
-
-ts_tsx_filter_regex=""
-if ((${#not_staged_ts_tsx[@]} > 0)); then
-  ts_tsx_filter_regex=$(create_pattern "${not_staged_ts_tsx[@]}")
-fi
-
-prettier_filter_regex=""
-if ((${#not_staged_prettier[@]} > 0)); then
-  prettier_filter_regex=$(create_pattern "${not_staged_prettier[@]}")
-fi
-
-ts_tsx_to_restage=()
-if ((${#staged_ts_tsx[@]} > 0)); then
-  ts_tsx_to_restage=($(filter_fully_staged "$ts_tsx_filter_regex" "${staged_ts_tsx[@]}"))
-fi
-
-prettier_to_restage=()
-if ((${#staged_prettier[@]} > 0)); then
-  prettier_to_restage=($(filter_fully_staged "$prettier_filter_regex" "${staged_prettier[@]}"))
-fi
-
-eslint_exit_code=0
-prettier_exit_code=0
-test_exit_code=0
-
-eslint_fix_flag=()
-prettier_write_flag=()
-
-if can_autofix "${#ts_tsx_to_restage[@]}" "${#staged_ts_tsx[@]}"; then
-  eslint_fix_flag=(--fix)
-fi
-if can_autofix "${#prettier_to_restage[@]}" "${#staged_prettier[@]}"; then
-  prettier_write_flag=(--write)
-fi
-
-if [[ ${#staged_ts_tsx[@]} -gt 0 ]]; then
-  echo "Running ESLint on staged TypeScript files..."
-  pnpm exec eslint "${staged_ts_tsx[@]}" --quiet "${eslint_fix_flag[@]}" || eslint_exit_code=$?
-fi
-
-if [[ ${#staged_prettier[@]} -gt 0 ]]; then
-  echo "Running Prettier on staged files..."
-  if [[ ${#prettier_write_flag[@]} -gt 0 ]]; then
-    pnpm exec prettier "${staged_prettier[@]}" --write || prettier_exit_code=$?
-  else
-    pnpm exec prettier "${staged_prettier[@]}" --check || prettier_exit_code=$?
-  fi
-fi
-
-if [[ ${#staged_ts_tsx[@]} -gt 0 ]]; then
-  echo "Running tests..."
-  pnpm test || test_exit_code=$?
-  if [[ $test_exit_code -eq 0 ]]; then
-    echo -e "${GREEN}✔ All tests passed${NC}"
-  fi
-fi
-
-if [[ $eslint_exit_code -eq 0 && $prettier_exit_code -eq 0 && $test_exit_code -eq 0 ]]; then
-  restage_paths=()
-  ((${#ts_tsx_to_restage[@]})) && restage_paths+=("${ts_tsx_to_restage[@]}")
-  ((${#prettier_to_restage[@]})) && restage_paths+=("${prettier_to_restage[@]}")
-  if ((${#restage_paths[@]} > 0)); then
-    add_files_to_staged_tree "${restage_paths[@]}"
-  fi
-  if [[ ${#staged_ts_tsx[@]} -gt 0 || ${#staged_prettier[@]} -gt 0 ]]; then
-    echo -e "${GREEN}✔ Pre-commit checks passed${NC}"
-  fi
+if git diff --cached --quiet; then
   exit 0
 fi
 
-echo -e "${RED}✖ Pre-commit failed. Fix the errors above, then commit again.${NC}"
-echo -e "${YELLOW}Tip: pnpm lint:fix formats and auto-fixes the whole repo.${NC}"
-exit 1
+originally_staged=()
+while IFS= read -r path; do
+  [[ -n "$path" ]] && originally_staged+=("$path")
+done < <(git diff --cached --name-only)
+
+dirty_before=()
+while IFS= read -r path; do
+  [[ -n "$path" ]] && dirty_before+=("$path")
+done < <(git diff --name-only)
+
+echo "Running full-project lint and format fix (pnpm lint:fix)..."
+pnpm lint:fix
+
+echo "Running tests..."
+pnpm test
+echo -e "${GREEN}✔ All tests passed${NC}"
+
+echo "Re-staging commit and auto-fixed files..."
+for path in "${originally_staged[@]}"; do
+  [[ -n "$path" ]] && git add -- "$path"
+done
+
+while IFS= read -r path; do
+  [[ -z "$path" ]] && continue
+
+  for staged_path in "${originally_staged[@]}"; do
+    [[ "$path" == "$staged_path" ]] && continue 2
+  done
+
+  for dirty_path in "${dirty_before[@]}"; do
+    [[ "$path" == "$dirty_path" ]] && continue 2
+  done
+
+  git add -- "$path"
+done < <(git diff --name-only)
+
+echo -e "${GREEN}✔ Pre-commit checks passed${NC}"

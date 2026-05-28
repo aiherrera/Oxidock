@@ -89,11 +89,11 @@ To re-install them manually:
 pnpm hooks:install
 ```
 
-| Hook                 | What it does                                                                                                |
-| -------------------- | ----------------------------------------------------------------------------------------------------------- |
-| `pre-commit`         | ESLint + Prettier on **staged** files only (auto-fix when fully staged), then `pnpm test` if TS/TSX changed |
-| `pre-push`           | Full `pnpm lint`, `pnpm typecheck`, and `pnpm test` before push                                             |
-| `prepare-commit-msg` | If the branch starts with an issue number (e.g. `42-my-feature`), appends `Related work item: #42`          |
+| Hook                 | What it does                                                                                                  |
+| -------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `pre-commit`         | Full `pnpm lint:fix` on the repo, then `pnpm test`; re-stages your commit plus any clean files auto-formatted |
+| `pre-push`           | Full `pnpm lint`, `pnpm typecheck`, and `pnpm test` before push                                               |
+| `prepare-commit-msg` | If the branch starts with an issue number (e.g. `42-my-feature`), appends `Related work item: #42`            |
 
 Disable the issue footer: `git config oxidock.hooks.issueFooter false`
 

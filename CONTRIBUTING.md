@@ -15,9 +15,9 @@ pnpm tauri dev
 
 ## Quality gates
 
-Local Git hooks mirror the staged-file workflow used in larger front-end repos:
+Local Git hooks:
 
-- **pre-commit** — ESLint and Prettier on staged files (auto-fix only when a file is fully staged), then Vitest when TypeScript changes are included.
+- **pre-commit** — `pnpm lint:fix` on the whole project, then Vitest; re-stages your commit and any previously clean files that were auto-formatted (unstaged WIP is not auto-staged).
 - **pre-push** — `pnpm lint`, `pnpm typecheck`, and `pnpm test` so unpushed work cannot bypass the full gate.
 - **prepare-commit-msg** — optional `Related work item: #N` footer when the branch name starts with `N` (disable with `git config oxidock.hooks.issueFooter false`).
 
