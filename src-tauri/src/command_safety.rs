@@ -100,10 +100,11 @@ pub fn classify_docker_command_risk(completion: &str) -> Result<AiCommandRisk, S
         return Ok(AiCommandRisk::Destructive);
     }
 
-    if tokens
-        .iter()
-        .any(|t| t == "rm" || t == "rmi" || t == "volume")
-    {
+    if tokens.iter().any(|t| t == "rm" || t == "rmi") {
+        return Ok(AiCommandRisk::Destructive);
+    }
+
+    if tokens.iter().any(|t| t == "volume") {
         // `docker volume` alone can be safe, but we err on the side of safety unless
         // it's clearly a list/ls/inspect operation.
         if joined.contains("volume ls")
@@ -262,6 +263,13 @@ mod tests {
     fn classifies_prune_as_destructive() {
         let risk = classify_docker_command_risk("docker system prune -f").unwrap();
         assert!(matches!(risk, AiCommandRisk::Destructive));
+    }
+
+    #[test]
+    fn classifies_container_rm_as_destructive() {
+        let classification = classify_docker_command("docker rm d04fc034dc2a").unwrap();
+        assert!(matches!(classification.risk, CommandRiskLevel::Destructive));
+        assert!(!classification.reasons.is_empty());
     }
 
     #[test]
