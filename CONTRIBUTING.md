@@ -40,6 +40,26 @@ pnpm run doctor -- --verbose --diff
 
 ## Conventions
 
+### Commit messages
+
+Oxidock uses [Conventional Commits](https://www.conventionalcommits.org/) so [Release Please](https://github.com/googleapis/release-please) can generate [CHANGELOG.md](CHANGELOG.md) and version bumps.
+
+Use these prefixes in PR titles (especially when squash-merging):
+
+| Prefix       | When to use                                      |
+| ------------ | ------------------------------------------------ |
+| `feat:`      | User-visible feature                               |
+| `fix:`       | User-visible bug fix                             |
+| `docs:`      | Documentation only                               |
+| `test:`      | Tests only                                       |
+| `refactor:`  | Internal refactor, no behavior change            |
+| `chore:`     | Tooling, deps, formatting                        |
+| `ci:`        | CI / release automation                          |
+
+Examples: `feat(ui): add container bulk actions`, `fix(cli): require confirmation for docker rm -f`.
+
+You do not edit `CHANGELOG.md` by hand; merged conventional commits appear in the next Release PR.
+
 ### TypeScript / React
 
 - Use functional components and hooks.

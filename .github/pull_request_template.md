@@ -2,6 +2,10 @@
 
 <!-- What does this PR change and why? -->
 
+## Commit title (for squash merge)
+
+<!-- Use a Conventional Commit title, e.g. feat(containers): add row actions. This becomes the squash commit and appears in CHANGELOG.md via Release Please. -->
+
 ## Type of change
 
 - [ ] Bug fix

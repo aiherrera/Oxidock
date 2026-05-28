@@ -128,7 +128,7 @@ The optional on-device assistant downloads a small GGUF model from Hugging Face 
 
 ## Releases
 
-macOS builds are signed, notarized, and published to GitHub Releases when a version tag (`v*.*.*`) is pushed. Maintainer setup and verification steps are in [RELEASE.md](RELEASE.md).
+[CHANGELOG.md](CHANGELOG.md) and version bumps are managed by [Release Please](https://github.com/googleapis/release-please) from [Conventional Commits](https://www.conventionalcommits.org/) on `main` (see [CONTRIBUTING.md](CONTRIBUTING.md)). Merging the Release PR creates a `v*.*.*` tag; that tag triggers signed, notarized macOS builds on GitHub Releases. Maintainer setup and verification steps are in [RELEASE.md](RELEASE.md).
 
 ## License
 
