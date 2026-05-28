@@ -1,6 +1,6 @@
 # Changelog
 
-## [0.2.0](https://github.com/aiherrera/Oxidock/compare/oxidock-v0.1.0...oxidock-v0.2.0) (2026-05-28)
+## [0.2.0](https://github.com/aiherrera/Oxidock/compare/v0.1.0...v0.2.0) (2026-05-28)
 
 
 ### Features
