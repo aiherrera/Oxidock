@@ -86,6 +86,10 @@ jobs:
           fi
           echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
 
+      # codesign/AMFI rejects `<true />`; plutil normalizes to `<true/>` (see Apple TN3125).
+      - name: Normalize entitlements for codesign
+        run: plutil -convert xml1 src-tauri/Entitlements.plist
+
       - name: Build, sign, notarize, and publish
         uses: tauri-apps/tauri-action@v0
         env:
