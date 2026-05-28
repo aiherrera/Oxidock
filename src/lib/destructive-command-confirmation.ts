@@ -45,4 +45,3 @@ export const getDestructiveConfirmationPhrase = (normalizedDockerCommand: string
   const { projectName } = extractComposeProjectName(normalizedDockerCommand);
   return projectName ?? DEFAULT_DESTRUCTIVE_CONFIRMATION_PHRASE;
 };
-

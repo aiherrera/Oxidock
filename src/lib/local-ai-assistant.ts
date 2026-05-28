@@ -40,7 +40,7 @@ export const uninstallLocalAiAssistant = async (): Promise<LocalAiAssistantStatu
   invoke<LocalAiAssistantStatus>("remove_ai_assistant");
 
 export const listenLocalAiAssistantInstallStatus = (
-  onStatus: (status: LocalAiAssistantStatus) => void,
+  onStatus: (status: LocalAiAssistantStatus) => void
 ): Promise<() => void> =>
   listen<LocalAiAssistantStatus>(AI_ASSISTANT_INSTALL_STATUS_EVENT, (event) => {
     onStatus(event.payload);

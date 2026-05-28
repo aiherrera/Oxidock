@@ -50,8 +50,7 @@ function InstallProgressPanel({
 }) {
   const activeStepIndex = getActiveInstallStepIndex(message);
   const progressDetail = formatProgressDetail(progress);
-  const percent =
-    progress?.percent != null ? Math.min(100, Math.max(0, Math.round(progress.percent))) : null;
+  const percent = progress?.percent != null ? Math.min(100, Math.max(0, Math.round(progress.percent))) : null;
 
   return (
     <div className="mt-3 space-y-2">
@@ -85,11 +84,7 @@ function InstallProgressPanel({
             <li
               key={step.id}
               className={
-                isActive
-                  ? "font-medium text-(--text-secondary)"
-                  : isComplete
-                    ? "text-(--text-secondary)"
-                    : undefined
+                isActive ? "font-medium text-(--text-secondary)" : isComplete ? "text-(--text-secondary)" : undefined
               }
             >
               {isComplete ? "✓ " : isActive ? "• " : "○ "}
@@ -204,7 +199,12 @@ export function CliAiAssistantCard() {
               {status.message}
             </p>
           ) : null}
-          {isInstalling ? <InstallProgressPanel message={status.message} progress={status.progress} /> : null}
+          {isInstalling ? (
+            <InstallProgressPanel
+              message={status.message}
+              progress={status.progress}
+            />
+          ) : null}
         </div>
         <div className="flex shrink-0 gap-2">
           {isInstalled ? (

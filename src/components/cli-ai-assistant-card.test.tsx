@@ -1,10 +1,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { CliAiAssistantCard } from "./cli-ai-assistant-card";
-import {
-  AI_ASSISTANT_INSTALL_STATUS_EVENT,
-  type LocalAiAssistantStatus,
-} from "../lib/local-ai-assistant";
+import { AI_ASSISTANT_INSTALL_STATUS_EVENT, type LocalAiAssistantStatus } from "../lib/local-ai-assistant";
 
 const unlistenMock = vi.fn();
 let installStatusHandler: ((event: { payload: LocalAiAssistantStatus }) => void) | undefined;
@@ -53,7 +50,7 @@ describe("CliAiAssistantCard", () => {
       () =>
         new Promise((resolve) => {
           resolveInstall = resolve;
-        }),
+        })
     );
 
     render(<CliAiAssistantCard />);

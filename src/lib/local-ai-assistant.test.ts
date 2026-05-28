@@ -4,7 +4,7 @@ import { getInvokeErrorMessage } from "./local-ai-assistant";
 describe("getInvokeErrorMessage", () => {
   it("returns string invoke errors", () => {
     expect(getInvokeErrorMessage("Failed to download model: network", "fallback")).toBe(
-      "Failed to download model: network",
+      "Failed to download model: network"
     );
   });
 
