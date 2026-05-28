@@ -34,6 +34,8 @@
     "test:watch": "vitest",
     "audit": "pnpm audit --prod",
     "check": "pnpm lint && pnpm typecheck && pnpm test && pnpm build",
+    "hooks:install": "sh scripts/install-git-hooks.sh",
+    "postinstall": "sh scripts/install-git-hooks.sh",
     "format": "prettier . --write",
     "format:check": "prettier . --check",
     "lint": "eslint . && pnpm format:check",

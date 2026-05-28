@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repo_root="$(git rev-parse --show-toplevel)"
+# shellcheck source=scripts/git-hooks-lib.sh
+source "$repo_root/scripts/git-hooks-lib.sh"
+
+cd "$repo_root"
+
+echo "Running pre-push quality gate (lint, typecheck, test)..."
+if pnpm lint && pnpm typecheck && pnpm test; then
+  echo -e "${GREEN}✔ Pre-push checks passed${NC}"
+  exit 0
+fi
+
+echo -e "${RED}✖ Pre-push failed. Push blocked until lint, types, and tests pass.${NC}"
+exit 1

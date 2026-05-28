@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Optional: append issue reference when branch name starts with digits (e.g. 42-add-feature).
+# Disable per clone: git config oxidock.hooks.issueFooter false
+
+COMMIT_MSG_FILE="${1:?}"
+issue_footer_enabled="$(git config --get oxidock.hooks.issueFooter 2>/dev/null || echo true)"
+if [[ "$issue_footer_enabled" == "false" ]]; then
+  exit 0
+fi
+
+branch="$(git symbolic-ref --short HEAD 2>/dev/null || true)"
+issue_id="$(printf '%s' "$branch" | grep -oE '^[0-9]+' || true)"
+
+if [[ -z "$issue_id" ]]; then
+  exit 0
+fi
+
+if grep -qE "(#${issue_id}\b|GH-${issue_id}\b)" "$COMMIT_MSG_FILE"; then
+  exit 0
+fi
+
+{
+  echo ""
+  echo "Related work item: #${issue_id}"
+} >>"$COMMIT_MSG_FILE"
