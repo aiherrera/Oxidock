@@ -236,10 +236,7 @@ async fn download_model_to_disk(app: &AppHandle) -> Result<AiModelMetadata, Stri
     };
 
     if !response.status().is_success() {
-        let message = format!(
-            "Model download failed with status: {}",
-            response.status()
-        );
+        let message = format!("Model download failed with status: {}", response.status());
         emit_install_status(app, &error_status(&message, None));
         return Err(message);
     }
@@ -287,13 +284,11 @@ async fn download_model_to_disk(app: &AppHandle) -> Result<AiModelMetadata, Stri
                 return Err(message);
             }
         };
-        file.write_all(&chunk)
-            .await
-            .map_err(|error| {
-                let message = format!("Failed writing temp model file: {error}");
-                emit_install_status(app, &error_status(&message, Some(progress.clone())));
-                message
-            })?;
+        file.write_all(&chunk).await.map_err(|error| {
+            let message = format!("Failed writing temp model file: {error}");
+            emit_install_status(app, &error_status(&message, Some(progress.clone())));
+            message
+        })?;
         hasher.update(&chunk);
         downloaded_bytes = downloaded_bytes.saturating_add(chunk.len() as u64);
 
@@ -301,7 +296,8 @@ async fn download_model_to_disk(app: &AppHandle) -> Result<AiModelMetadata, Stri
         progress.percent = compute_percent(downloaded_bytes, total_bytes);
 
         let delta = downloaded_bytes.saturating_sub(last_emit_bytes);
-        if delta >= PROGRESS_EMIT_MIN_DELTA_BYTES || last_emit.elapsed() >= PROGRESS_EMIT_MIN_INTERVAL
+        if delta >= PROGRESS_EMIT_MIN_DELTA_BYTES
+            || last_emit.elapsed() >= PROGRESS_EMIT_MIN_INTERVAL
         {
             emit_install_status(
                 app,
@@ -312,13 +308,11 @@ async fn download_model_to_disk(app: &AppHandle) -> Result<AiModelMetadata, Stri
         }
     }
 
-    file.flush()
-        .await
-        .map_err(|error| {
-            let message = format!("Failed flushing temp model file: {error}");
-            emit_install_status(app, &error_status(&message, Some(progress.clone())));
-            message
-        })?;
+    file.flush().await.map_err(|error| {
+        let message = format!("Failed flushing temp model file: {error}");
+        emit_install_status(app, &error_status(&message, Some(progress.clone())));
+        message
+    })?;
 
     emit_install_status(
         app,
@@ -654,10 +648,7 @@ mod tests {
             }),
         );
 
-        assert!(matches!(
-            status.state,
-            AiAssistantInstallState::Installing
-        ));
+        assert!(matches!(status.state, AiAssistantInstallState::Installing));
         assert_eq!(
             status.message.as_deref(),
             Some("Downloading assistant model…")
