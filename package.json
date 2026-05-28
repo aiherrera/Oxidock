@@ -1,7 +1,7 @@
 {
   "name": "oxidock",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "A desktop Docker manager built with Tauri 2 and React 19",
   "author": "Alain Iglesias",
   "license": "MIT",

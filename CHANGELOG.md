@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.2.0](https://github.com/aiherrera/Oxidock/compare/oxidock-v0.1.0...oxidock-v0.2.0) (2026-05-28)
+
+
+### Features
+
+* **menu:** Add standard Edit menu shortcuts ([a09800c](https://github.com/aiherrera/Oxidock/commit/a09800cf0cdf7a41ba3fa87ed0cd22ea2b62e7fd))
+* **tauri:** Add Docker desktop backend ([0d10955](https://github.com/aiherrera/Oxidock/commit/0d10955d9b8c2516b1a06b90d3854f267aac911a))
+* **tauri:** Stream AI model install progress events ([033d865](https://github.com/aiherrera/Oxidock/commit/033d865ac3c5339103d920c4ff819fc6aac97d42))
+* **ui:** Add container row lifecycle actions ([e24a7db](https://github.com/aiherrera/Oxidock/commit/e24a7db8157d20f905d4e81c354bb2d3833d569d))
+* **ui:** Add Oxidock desktop interface ([da7b77e](https://github.com/aiherrera/Oxidock/commit/da7b77eccf68579018e9a09997dd7c8461c38880))
+* **ui:** Improve CLI playground confirmation and state ([23275ec](https://github.com/aiherrera/Oxidock/commit/23275ec00c718a8999bbb0184b0d6e7b5b3877e2))
+* **ui:** Show AI assistant install progress ([157139d](https://github.com/aiherrera/Oxidock/commit/157139de3199325581cba944b1b23a3706d97f2d))
+
+
+### Bug Fixes
+
+* **release:** Normalize entitlements for macOS codesign ([6348487](https://github.com/aiherrera/Oxidock/commit/63484871614bb0928f70c2bd140c28c1a99293aa))
+* **tauri:** Classify docker rm as destructive ([4e9a1a8](https://github.com/aiherrera/Oxidock/commit/4e9a1a81241c61162cc5e3f2148dfd512f466d23))
+
 ## [0.1.0](https://github.com/aiherrera/oxidock/releases/tag/v0.1.0) (2026-05-27)
 
 ### Features
