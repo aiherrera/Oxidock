@@ -29,7 +29,7 @@ tokio = { version = "1.52.3", features = ["macros", "rt-multi-thread", "process"
 shell-words = "1.1"
 sha2 = "0.10"
 reqwest = { version = "0.12", features = ["stream", "json"] }
-keyring = "3"
+keyring = "4"
 uuid = { version = "1", features = ["v4"] }
 sysinfo = "0.33"
 
