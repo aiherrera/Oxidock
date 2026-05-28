@@ -37,7 +37,7 @@ export function AppShell({
   onOpenSettings,
 }: AppShellProps) {
   return (
-    <div className="flex h-screen flex-col overflow-hidden bg-(--bg) text-(--text-primary)">
+    <div className="flex h-screen min-h-[640px] min-w-[960px] flex-col overflow-hidden bg-(--bg) text-(--text-primary)">
       <TitleBar
         ref={titleBarRef}
         isLoading={isLoading}

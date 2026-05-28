@@ -147,7 +147,7 @@ export function Sidebar({
             isCompact ? "hidden" : "ml-auto"
           }`}
         >
-          MVP
+          BETA
         </span>
       </div>
 

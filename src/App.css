@@ -133,14 +133,3 @@ input:focus-visible {
 .title-bar__brand {
   padding-left: calc(var(--titlebar-traffic-light-inset) - 0.75rem);
 }
-
-@media (max-width: 1023px) {
-  body {
-    overflow: auto;
-  }
-
-  #root > div {
-    min-height: 100vh;
-    height: auto;
-  }
-}
