@@ -3,7 +3,8 @@ use bollard::models::ContainerStatsResponse;
 use bollard::query_parameters::{
     EventsOptionsBuilder, InspectContainerOptions, ListContainersOptions, ListImagesOptions,
     ListNetworksOptions, ListVolumesOptions, LogsOptions, RemoveContainerOptions,
-    RestartContainerOptions, StartContainerOptions, StatsOptions, StopContainerOptions,
+    RemoveImageOptions, RemoveVolumeOptions, RestartContainerOptions, StartContainerOptions,
+    StatsOptions, StopContainerOptions,
 };
 use bollard::Docker;
 use chrono::{TimeZone, Utc};
@@ -507,6 +508,63 @@ impl DockerState {
             .map_err(clean_error)
     }
 
+    pub async fn remove_image(
+        &self,
+        app: &AppHandle,
+        engine: &EngineManager,
+        id: &str,
+        force: bool,
+    ) -> Result<(), String> {
+        let docker = self.client(app, engine)?;
+        docker
+            .remove_image(
+                id,
+                Some(RemoveImageOptions {
+                    force,
+                    ..Default::default()
+                }),
+                None,
+            )
+            .await
+            .map(|_| ())
+            .map_err(clean_error)
+    }
+
+    pub async fn remove_volume(
+        &self,
+        app: &AppHandle,
+        engine: &EngineManager,
+        name: &str,
+        force: bool,
+    ) -> Result<(), String> {
+        let docker = self.client(app, engine)?;
+        docker
+            .remove_volume(
+                name,
+                Some(RemoveVolumeOptions {
+                    force,
+                    ..Default::default()
+                }),
+            )
+            .await
+            .map_err(clean_error)
+    }
+
+    pub async fn remove_network(
+        &self,
+        app: &AppHandle,
+        engine: &EngineManager,
+        id: &str,
+        force: bool,
+    ) -> Result<(), String> {
+        if is_protected_network_name(id) && !force {
+            return Err("Default Docker networks cannot be removed.".to_string());
+        }
+
+        let docker = self.client(app, engine)?;
+        docker.remove_network(id).await.map_err(clean_error)
+    }
+
     pub async fn container_stats(
         &self,
         app: &AppHandle,
@@ -871,6 +929,13 @@ fn log_output_to_string(output: LogOutput) -> String {
     format!("{output}")
 }
 
+pub fn is_protected_network_name(name: &str) -> bool {
+    matches!(
+        name.trim().to_ascii_lowercase().as_str(),
+        "bridge" | "host" | "none"
+    )
+}
+
 fn clean_error(error: bollard::errors::Error) -> String {
     let message = clean_text(error.to_string());
 
@@ -885,7 +950,7 @@ fn clean_error(error: bollard::errors::Error) -> String {
 mod tests {
     use super::{
         clean_container_name, clean_text, format_bytes, format_created_timestamp,
-        format_last_started, format_port_summaries, short_id,
+        format_last_started, format_port_summaries, is_protected_network_name, short_id,
     };
     use bollard::models::PortSummary;
 
@@ -955,5 +1020,13 @@ mod tests {
     fn formats_bytes_for_display() {
         assert_eq!(format_bytes(0), "0B");
         assert_eq!(format_bytes(1536), "1.50KB");
+    }
+
+    #[test]
+    fn identifies_protected_default_networks() {
+        assert!(is_protected_network_name("bridge"));
+        assert!(is_protected_network_name("HOST"));
+        assert!(is_protected_network_name(" none "));
+        assert!(!is_protected_network_name("oxidock_default"));
     }
 }

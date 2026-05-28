@@ -30,6 +30,12 @@ export const restartContainer = (id: string) => invoke<void>("restart_container"
 
 export const removeContainer = (id: string, force = false) => invoke<void>("remove_container", { id, force });
 
+export const removeImage = (id: string, force = false) => invoke<void>("remove_image", { id, force });
+
+export const removeVolume = (name: string, force = false) => invoke<void>("remove_volume", { name, force });
+
+export const removeNetwork = (id: string, force = false) => invoke<void>("remove_network", { id, force });
+
 export const fetchImages = () => invoke<ImageInfo[]>("get_images");
 
 export const fetchVolumes = () => invoke<VolumeInfo[]>("get_volumes");

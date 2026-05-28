@@ -91,11 +91,12 @@ struct AiModelManifest {
 /// Small instruct/coder GGUF for local desktop inference (swap by updating this manifest).
 const ASSISTANT_MODEL: AiModelManifest = AiModelManifest {
     display_name: "oxidock-assist",
-    size_label: "~200 MB",
+    size_label: "~380 MB",
     file_name: "assistant.gguf",
-    download_url: "https://huggingface.co/bartowski/Qwen2.5-Coder-0.5B-Instruct-GGUF/resolve/main/Qwen2.5-Coder-0.5B-Instruct-Q4_K_M.gguf",
-    // SHA256 of bartowski/Qwen2.5-Coder-0.5B-Instruct-Q4_K_M.gguf (see Hugging Face model card).
-    expected_sha256: Some("d618e5e4976bf4ccd36a2523678784d9fc18fcce6b3eaff589767f9b01a3142b"),
+    // Pin to a specific commit so resolve/main re-uploads do not break checksum verification.
+    download_url: "https://huggingface.co/bartowski/Qwen2.5-Coder-0.5B-Instruct-GGUF/resolve/69a2c192eed24297fb09a34d8ba948b8624cc3e2/Qwen2.5-Coder-0.5B-Instruct-Q4_K_M.gguf",
+    // LFS SHA256 for Qwen2.5-Coder-0.5B-Instruct-Q4_K_M.gguf at commit 69a2c19.
+    expected_sha256: Some("0128e77564e43d40682f82d7ebe8a9abdf0c24c8f55fa85629f8cc156b1b6560"),
 };
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -329,7 +330,10 @@ async fn download_model_to_disk(app: &AppHandle) -> Result<AiModelMetadata, Stri
     if let Some(expected) = ASSISTANT_MODEL.expected_sha256 {
         if expected != metadata.model_sha256 {
             let _ = tokio::fs::remove_file(&temp_path).await;
-            let message = "Downloaded model checksum mismatch.".to_string();
+            let message = format!(
+                "Downloaded model checksum mismatch (expected {expected}, got {}).",
+                metadata.model_sha256
+            );
             emit_install_status(app, &error_status(&message, Some(progress.clone())));
             return Err(message);
         }
@@ -606,6 +610,224 @@ If you are unsure, still return plausible read-only commands.
     }
 
     Ok(SuggestDockerCommandsResponse { suggestions })
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AppInsightsSource {
+    pub id: String,
+    pub kind: String,
+    pub label: String,
+    pub detail: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AppInsightsSuggestedCommand {
+    pub command: String,
+    pub label: String,
+    pub explanation: String,
+    pub risk: AiCommandRisk,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AppInsightsStackTrace {
+    pub title: String,
+    pub content: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AppInsightsResponse {
+    pub answer: String,
+    pub reasoning: Option<String>,
+    pub sources: Vec<AppInsightsSource>,
+    pub suggested_commands: Vec<AppInsightsSuggestedCommand>,
+    pub stack_traces: Vec<AppInsightsStackTrace>,
+    pub used_model: bool,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct RawAppInsightsCommand {
+    command: String,
+    label: String,
+    explanation: String,
+    risk: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct RawAppInsightsResponse {
+    answer: String,
+    reasoning: Option<String>,
+    sources: Option<Vec<AppInsightsSource>>,
+    suggested_commands: Option<Vec<RawAppInsightsCommand>>,
+    stack_traces: Option<Vec<AppInsightsStackTrace>>,
+}
+
+fn parse_risk_label(value: Option<&str>) -> AiCommandRisk {
+    match value.unwrap_or("safe").to_lowercase().as_str() {
+        "destructive" => AiCommandRisk::Destructive,
+        "medium" | "caution" => AiCommandRisk::Medium,
+        _ => AiCommandRisk::Safe,
+    }
+}
+
+fn sanitize_suggested_commands(
+    raw_commands: Vec<RawAppInsightsCommand>,
+) -> Vec<AppInsightsSuggestedCommand> {
+    let mut commands = Vec::new();
+
+    for raw in raw_commands {
+        let normalized =
+            match crate::command_safety::validate_and_normalize_docker_command_completion(
+                &raw.command,
+            ) {
+                Ok(value) => value,
+                Err(_) => continue,
+            };
+
+        let risk = match crate::command_safety::classify_docker_command_risk(&normalized) {
+            Ok(value) => value,
+            Err(_) => parse_risk_label(raw.risk.as_deref()),
+        };
+
+        let label = raw.label.trim();
+        let explanation = raw.explanation.trim();
+        if label.is_empty() || explanation.is_empty() {
+            continue;
+        }
+
+        commands.push(AppInsightsSuggestedCommand {
+            command: normalized,
+            label: label.to_string(),
+            explanation: explanation.to_string(),
+            risk,
+        });
+    }
+
+    if commands.len() > 5 {
+        commands.truncate(5);
+    }
+
+    commands
+}
+
+pub async fn ask_app_insights_assistant(
+    app: AppHandle,
+    question: String,
+    context_json: String,
+    deterministic_answer: String,
+    deterministic_reasoning: Option<String>,
+    deterministic_sources: Vec<AppInsightsSource>,
+    deterministic_commands: Vec<AppInsightsSuggestedCommand>,
+    deterministic_stack_traces: Vec<AppInsightsStackTrace>,
+) -> Result<AppInsightsResponse, String> {
+    let fallback = AppInsightsResponse {
+        answer: deterministic_answer,
+        reasoning: deterministic_reasoning,
+        sources: deterministic_sources,
+        suggested_commands: deterministic_commands,
+        stack_traces: deterministic_stack_traces,
+        used_model: false,
+    };
+
+    let paths = resolve_ai_model_paths(&app)?;
+    if !paths.model_file.exists() {
+        return Ok(fallback);
+    }
+
+    let context_for_prompt = if context_json.len() > 12_000 {
+        format!("{}…", &context_json[..12_000])
+    } else {
+        context_json
+    };
+
+    let prompt = format!(
+        r#"
+You are Oxidock, a local Docker desktop assistant. Answer using ONLY the JSON context below.
+
+User question:
+{question}
+
+Docker context JSON:
+{context_for_prompt}
+
+Return ONLY valid JSON (no markdown fences) with this shape:
+{{
+  "answer": "<concise markdown answer for the user>",
+  "reasoning": "<short bullet-style analysis you used>",
+  "sources": [{{ "id": "container:abc", "kind": "container", "label": "postgres", "detail": "optional" }}],
+  "suggestedCommands": [
+    {{
+      "command": "docker logs --tail 50 postgres",
+      "label": "Inspect logs",
+      "explanation": "why this helps",
+      "risk": "safe"
+    }}
+  ],
+  "stackTraces": [{{ "title": "postgres logs", "content": "Error: ..." }}]
+}}
+
+Rules:
+- The answer must directly answer the user's question first, in 1-2 concise paragraphs or a short ranked list.
+- Do not use the answer field to restate the raw snapshot, dump logs, or list every finding.
+- Put investigation details in reasoning, sources, suggestedCommands, or stackTraces instead of the final answer.
+- Prefer read-only docker commands when unsure.
+- Mention specific container/image names from context when relevant.
+- If context is insufficient, say what is missing and suggest safe next steps.
+- Do not invent resources that are not in the context.
+"#
+    );
+
+    let sidecar_output = match run_gguf_inference(&app, &prompt).await {
+        Ok(value) => value,
+        Err(_) => return Ok(fallback),
+    };
+
+    let json_fragment = match extract_json_fragment(&sidecar_output) {
+        Some(value) => value,
+        None => return Ok(fallback),
+    };
+
+    let parsed: RawAppInsightsResponse = match serde_json::from_str(json_fragment) {
+        Ok(value) => value,
+        Err(_) => return Ok(fallback),
+    };
+
+    let answer = parsed.answer.trim();
+    if answer.is_empty() {
+        return Ok(fallback);
+    }
+
+    let suggested_commands = parsed
+        .suggested_commands
+        .map(sanitize_suggested_commands)
+        .unwrap_or_default();
+
+    Ok(AppInsightsResponse {
+        answer: answer.to_string(),
+        reasoning: parsed
+            .reasoning
+            .filter(|value| !value.trim().is_empty())
+            .or(fallback.reasoning),
+        sources: parsed
+            .sources
+            .filter(|s| !s.is_empty())
+            .unwrap_or(fallback.sources),
+        suggested_commands: if suggested_commands.is_empty() {
+            fallback.suggested_commands
+        } else {
+            suggested_commands
+        },
+        stack_traces: parsed
+            .stack_traces
+            .filter(|s| !s.is_empty())
+            .unwrap_or(fallback.stack_traces),
+        used_model: true,
+    })
 }
 
 #[cfg(test)]

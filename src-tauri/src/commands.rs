@@ -1,10 +1,12 @@
 use tauri::{AppHandle, State};
 
 use crate::ai::{
+    ask_app_insights_assistant as ask_app_insights_assistant_impl,
     get_ai_assistant_status as get_ai_assistant_status_impl,
     install_ai_assistant as install_ai_assistant_impl,
     remove_ai_assistant as remove_ai_assistant_impl,
     suggest_docker_commands as suggest_docker_commands_impl, AiAssistantStatus,
+    AppInsightsResponse, AppInsightsSource, AppInsightsStackTrace, AppInsightsSuggestedCommand,
     SuggestDockerCommandsResponse,
 };
 use crate::app_metrics::{
@@ -121,6 +123,45 @@ pub async fn remove_container(
 ) -> Result<(), String> {
     state
         .remove_container(&app, &engine, &id, force.unwrap_or(false))
+        .await
+}
+
+#[tauri::command]
+pub async fn remove_image(
+    app: AppHandle,
+    state: State<'_, DockerState>,
+    engine: State<'_, EngineManager>,
+    id: String,
+    force: Option<bool>,
+) -> Result<(), String> {
+    state
+        .remove_image(&app, &engine, &id, force.unwrap_or(false))
+        .await
+}
+
+#[tauri::command]
+pub async fn remove_volume(
+    app: AppHandle,
+    state: State<'_, DockerState>,
+    engine: State<'_, EngineManager>,
+    name: String,
+    force: Option<bool>,
+) -> Result<(), String> {
+    state
+        .remove_volume(&app, &engine, &name, force.unwrap_or(false))
+        .await
+}
+
+#[tauri::command]
+pub async fn remove_network(
+    app: AppHandle,
+    state: State<'_, DockerState>,
+    engine: State<'_, EngineManager>,
+    id: String,
+    force: Option<bool>,
+) -> Result<(), String> {
+    state
+        .remove_network(&app, &engine, &id, force.unwrap_or(false))
         .await
 }
 
@@ -272,6 +313,30 @@ pub async fn suggest_docker_commands(
     input: String,
 ) -> Result<SuggestDockerCommandsResponse, String> {
     suggest_docker_commands_impl(app, input).await
+}
+
+#[tauri::command]
+pub async fn ask_app_insights_assistant(
+    app: AppHandle,
+    question: String,
+    context_json: String,
+    deterministic_answer: String,
+    deterministic_reasoning: Option<String>,
+    deterministic_sources: Vec<AppInsightsSource>,
+    deterministic_commands: Vec<AppInsightsSuggestedCommand>,
+    deterministic_stack_traces: Vec<AppInsightsStackTrace>,
+) -> Result<AppInsightsResponse, String> {
+    ask_app_insights_assistant_impl(
+        app,
+        question,
+        context_json,
+        deterministic_answer,
+        deterministic_reasoning,
+        deterministic_sources,
+        deterministic_commands,
+        deterministic_stack_traces,
+    )
+    .await
 }
 
 #[tauri::command]
