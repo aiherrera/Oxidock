@@ -264,7 +264,9 @@ pub(crate) fn sum_blkio(entries: &[ContainerBlkioStatEntry], op: &str) -> u64 {
         .sum()
 }
 
-pub(crate) fn format_network_io(networks: Option<&HashMap<String, ContainerNetworkStats>>) -> String {
+pub(crate) fn format_network_io(
+    networks: Option<&HashMap<String, ContainerNetworkStats>>,
+) -> String {
     let networks = match networks {
         Some(networks) => networks,
         None => return "0B / 0B".to_string(),
@@ -301,4 +303,3 @@ pub(crate) fn format_bytes(bytes: u64) -> String {
         format!("{:.2}{}", value, UNITS[unit_index])
     }
 }
-

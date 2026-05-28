@@ -611,8 +611,14 @@ mod tests {
 
     #[test]
     fn oci_url_host_parses_ipv6_brackets_and_ports() {
-        assert_eq!(oci_url_host("https://[2001:db8::1]:5000/v2").unwrap(), "2001:db8::1");
-        assert_eq!(oci_url_host("https://registry.example.com:443").unwrap(), "registry.example.com");
+        assert_eq!(
+            oci_url_host("https://[2001:db8::1]:5000/v2").unwrap(),
+            "2001:db8::1"
+        );
+        assert_eq!(
+            oci_url_host("https://registry.example.com:443").unwrap(),
+            "registry.example.com"
+        );
     }
 
     #[test]
