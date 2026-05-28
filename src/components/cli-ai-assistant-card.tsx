@@ -1,12 +1,106 @@
 import { useCallback, useEffect, useState } from "react";
+import { formatFormattedBytes } from "../lib/format-bytes";
 import {
+  defaultLocalAiAssistantStatus,
+  getInvokeErrorMessage,
   getLocalAiAssistantStatus,
   installLocalAiAssistant,
+  listenLocalAiAssistantInstallStatus,
   uninstallLocalAiAssistant,
-  defaultLocalAiAssistantStatus,
   type LocalAiAssistantStatus,
+  type LocalAiInstallProgress,
 } from "../lib/local-ai-assistant";
 import { alertDanger, statusBadgeSuccess } from "../lib/theme-classes";
+
+const INSTALL_STEPS = [
+  { id: "download", label: "Download model", match: /download/i },
+  { id: "verify", label: "Verify checksum", match: /verif/i },
+  { id: "finalize", label: "Finalize installation", match: /finaliz/i },
+] as const;
+
+function formatProgressDetail(progress: LocalAiInstallProgress | null | undefined): string | null {
+  if (!progress) {
+    return null;
+  }
+
+  const downloaded = formatFormattedBytes(progress.downloadedBytes);
+  if (progress.totalBytes != null && progress.percent != null) {
+    const total = formatFormattedBytes(progress.totalBytes);
+    return `${downloaded} of ${total} (${Math.round(progress.percent)}%)`;
+  }
+
+  return `Downloaded ${downloaded}`;
+}
+
+function getActiveInstallStepIndex(message: string | null): number {
+  if (!message) {
+    return 0;
+  }
+
+  const index = INSTALL_STEPS.findIndex((step) => step.match.test(message));
+  return index >= 0 ? index : 0;
+}
+
+function InstallProgressPanel({
+  message,
+  progress,
+}: {
+  message: string | null;
+  progress: LocalAiInstallProgress | null | undefined;
+}) {
+  const activeStepIndex = getActiveInstallStepIndex(message);
+  const progressDetail = formatProgressDetail(progress);
+  const percent =
+    progress?.percent != null ? Math.min(100, Math.max(0, Math.round(progress.percent))) : null;
+
+  return (
+    <div className="mt-3 space-y-2">
+      {percent != null ? (
+        <div className="space-y-1">
+          <div
+            aria-label="Download progress"
+            aria-valuemax={100}
+            aria-valuemin={0}
+            aria-valuenow={percent}
+            className="h-1.5 overflow-hidden rounded-full bg-(--surface-hover)"
+            role="progressbar"
+          >
+            <div
+              className="h-full rounded-full bg-(--accent) transition-[width] duration-200"
+              style={{ width: `${percent}%` }}
+            />
+          </div>
+          {progressDetail ? <p className="text-xs text-(--text-muted)">{progressDetail}</p> : null}
+        </div>
+      ) : progressDetail ? (
+        <p className="text-xs text-(--text-muted)">{progressDetail}</p>
+      ) : null}
+
+      <ol className="space-y-1 text-xs text-(--text-muted)">
+        {INSTALL_STEPS.map((step, index) => {
+          const isActive = index === activeStepIndex;
+          const isComplete = index < activeStepIndex;
+
+          return (
+            <li
+              key={step.id}
+              className={
+                isActive
+                  ? "font-medium text-(--text-secondary)"
+                  : isComplete
+                    ? "text-(--text-secondary)"
+                    : undefined
+              }
+            >
+              {isComplete ? "✓ " : isActive ? "• " : "○ "}
+              {step.label}
+            </li>
+          );
+        })}
+      </ol>
+    </div>
+  );
+}
 
 export function CliAiAssistantCard() {
   const [status, setStatus] = useState<LocalAiAssistantStatus>(defaultLocalAiAssistantStatus);
@@ -17,21 +111,53 @@ export function CliAiAssistantCard() {
       .catch(() => setStatus(defaultLocalAiAssistantStatus));
   }, []);
 
+  const isInstalling = status.state === "installing";
+
+  useEffect(() => {
+    if (!isInstalling) {
+      return;
+    }
+
+    let disposed = false;
+    let unlisten: (() => void) | undefined;
+
+    const setup = async () => {
+      unlisten = await listenLocalAiAssistantInstallStatus((next) => {
+        if (!disposed) {
+          setStatus(next);
+        }
+      });
+
+      if (disposed) {
+        unlisten();
+      }
+    };
+
+    void setup();
+
+    return () => {
+      disposed = true;
+      unlisten?.();
+    };
+  }, [isInstalling]);
+
   const handleInstall = useCallback(async () => {
     setStatus((current) => ({
       ...current,
       state: "installing",
-      message: "Downloading assistant model…",
+      message: "Starting download…",
+      progress: null,
     }));
 
     try {
       const next = await installLocalAiAssistant();
       setStatus(next);
-    } catch {
+    } catch (error) {
       setStatus((current) => ({
         ...current,
         state: "error",
-        message: "Install failed. Try again later.",
+        message: getInvokeErrorMessage(error, "Install failed. Try again later."),
+        progress: null,
       }));
     }
   }, []);
@@ -41,21 +167,22 @@ export function CliAiAssistantCard() {
       ...current,
       state: "installing",
       message: "Removing assistant…",
+      progress: null,
     }));
 
     try {
       const next = await uninstallLocalAiAssistant();
       setStatus(next);
-    } catch {
+    } catch (error) {
       setStatus((current) => ({
         ...current,
         state: "error",
-        message: "Remove failed. Try again later.",
+        message: getInvokeErrorMessage(error, "Remove failed. Try again later."),
+        progress: null,
       }));
     }
   }, []);
 
-  const isInstalling = status.state === "installing";
   const isInstalled = status.state === "installed";
 
   return (
@@ -77,13 +204,14 @@ export function CliAiAssistantCard() {
               {status.message}
             </p>
           ) : null}
+          {isInstalling ? <InstallProgressPanel message={status.message} progress={status.progress} /> : null}
         </div>
         <div className="flex shrink-0 gap-2">
           {isInstalled ? (
             <button
               className="inline-flex min-h-9 items-center rounded-lg border border-(--border) px-3 py-1.5 text-xs text-(--text-secondary) transition hover:bg-(--surface-hover) hover:text-(--text-primary)"
               type="button"
-              onClick={handleUninstall}
+              onClick={() => void handleUninstall()}
             >
               Remove
             </button>

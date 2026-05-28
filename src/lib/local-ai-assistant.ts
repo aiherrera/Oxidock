@@ -1,5 +1,8 @@
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import type { DockerCommandRisk } from "./docker-command-registry";
+
+export const AI_ASSISTANT_INSTALL_STATUS_EVENT = "ai-assistant-install-status";
 
 export type LocalAiInstallState = "notInstalled" | "installing" | "installed" | "error";
 
@@ -35,6 +38,23 @@ export const installLocalAiAssistant = async (): Promise<LocalAiAssistantStatus>
 
 export const uninstallLocalAiAssistant = async (): Promise<LocalAiAssistantStatus> =>
   invoke<LocalAiAssistantStatus>("remove_ai_assistant");
+
+export const listenLocalAiAssistantInstallStatus = (
+  onStatus: (status: LocalAiAssistantStatus) => void,
+): Promise<() => void> =>
+  listen<LocalAiAssistantStatus>(AI_ASSISTANT_INSTALL_STATUS_EVENT, (event) => {
+    onStatus(event.payload);
+  });
+
+export const getInvokeErrorMessage = (error: unknown, fallback: string): string => {
+  if (typeof error === "string" && error.trim().length > 0) {
+    return error;
+  }
+  if (error instanceof Error && error.message.trim().length > 0) {
+    return error.message;
+  }
+  return fallback;
+};
 
 export type AiCommandSuggestion = {
   id: string;
