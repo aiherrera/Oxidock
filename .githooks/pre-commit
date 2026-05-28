@@ -24,6 +24,9 @@ done < <(git diff --name-only)
 echo "Running full-project lint and format fix (pnpm lint:fix)..."
 pnpm lint:fix
 
+echo "Formatting Rust code..."
+pnpm rust:format
+
 echo "Running tests..."
 pnpm test
 echo -e "${GREEN}✔ All tests passed${NC}"
