@@ -15,6 +15,14 @@ pnpm tauri dev
 
 ## Quality gates
 
+Local Git hooks mirror the staged-file workflow used in larger front-end repos:
+
+- **pre-commit** — ESLint and Prettier on staged files (auto-fix only when a file is fully staged), then Vitest when TypeScript changes are included.
+- **pre-push** — `pnpm lint`, `pnpm typecheck`, and `pnpm test` so unpushed work cannot bypass the full gate.
+- **prepare-commit-msg** — optional `Related work item: #N` footer when the branch name starts with `N` (disable with `git config oxidock.hooks.issueFooter false`).
+
+`pnpm install` configures the hooks automatically through `postinstall`. Run `pnpm hooks:install` if you need to re-apply them manually.
+
 Before opening a pull request, run:
 
 ```bash
@@ -32,11 +40,10 @@ pnpm run doctor -- --verbose --diff
 
 ## Project layout
 
-| Path                    | Purpose                                             |
-| ----------------------- | --------------------------------------------------- |
-| `src/`                  | React UI (components, hooks, lib adapters, types)   |
-| `src-tauri/src/`        | Rust backend (Docker, engine, registry, AI, safety) |
-| `ARCHITECTURE_AUDIT.md` | Architecture and OSS readiness notes                |
+| Path             | Purpose                                             |
+| ---------------- | --------------------------------------------------- |
+| `src/`           | React UI (components, hooks, lib adapters, types)   |
+| `src-tauri/src/` | Rust backend (Docker, engine, registry, AI, safety) |
 
 ## Conventions
 
@@ -46,15 +53,15 @@ Oxidock uses [Conventional Commits](https://www.conventionalcommits.org/) so [Re
 
 Use these prefixes in PR titles (especially when squash-merging):
 
-| Prefix       | When to use                                      |
-| ------------ | ------------------------------------------------ |
-| `feat:`      | User-visible feature                               |
-| `fix:`       | User-visible bug fix                             |
-| `docs:`      | Documentation only                               |
-| `test:`      | Tests only                                       |
-| `refactor:`  | Internal refactor, no behavior change            |
-| `chore:`     | Tooling, deps, formatting                        |
-| `ci:`        | CI / release automation                          |
+| Prefix      | When to use                           |
+| ----------- | ------------------------------------- |
+| `feat:`     | User-visible feature                  |
+| `fix:`      | User-visible bug fix                  |
+| `docs:`     | Documentation only                    |
+| `test:`     | Tests only                            |
+| `refactor:` | Internal refactor, no behavior change |
+| `chore:`    | Tooling, deps, formatting             |
+| `ci:`       | CI / release automation               |
 
 Examples: `feat(ui): add container bulk actions`, `fix(cli): require confirmation for docker rm -f`.
 

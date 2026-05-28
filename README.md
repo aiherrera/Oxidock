@@ -80,6 +80,23 @@ pnpm install
 pnpm tauri dev
 ```
 
+### Git hooks
+
+Local hooks are installed automatically by `postinstall` when you run `pnpm install`.
+To re-install them manually:
+
+```bash
+pnpm hooks:install
+```
+
+| Hook                 | What it does                                                                                                |
+| -------------------- | ----------------------------------------------------------------------------------------------------------- |
+| `pre-commit`         | ESLint + Prettier on **staged** files only (auto-fix when fully staged), then `pnpm test` if TS/TSX changed |
+| `pre-push`           | Full `pnpm lint`, `pnpm typecheck`, and `pnpm test` before push                                             |
+| `prepare-commit-msg` | If the branch starts with an issue number (e.g. `42-my-feature`), appends `Related work item: #42`          |
+
+Disable the issue footer: `git config oxidock.hooks.issueFooter false`
+
 ### Quality checks
 
 ```bash
@@ -120,11 +137,10 @@ The optional on-device assistant downloads a small GGUF model from Hugging Face 
 
 ## Project layout
 
-| Path                           | Purpose                                               |
-| ------------------------------ | ----------------------------------------------------- |
-| `src/`                         | React UI                                              |
-| `src-tauri/`                   | Rust backend (Docker, registry, engine lifecycle, AI) |
-| `.agents/skills/react-doctor/` | React Doctor workflow for UI diagnostics              |
+| Path         | Purpose                                               |
+| ------------ | ----------------------------------------------------- |
+| `src/`       | React UI                                              |
+| `src-tauri/` | Rust backend (Docker, registry, engine lifecycle, AI) |
 
 ## Releases
 
