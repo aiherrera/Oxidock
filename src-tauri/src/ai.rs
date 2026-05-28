@@ -4,7 +4,8 @@ use std::fs;
 use std::path::PathBuf;
 use std::process::Stdio;
 use std::time::Duration;
-use tauri::{AppHandle, Manager};
+use std::time::Instant;
+use tauri::{AppHandle, Emitter, Manager};
 use tokio::io::AsyncWriteExt;
 use tokio::process::Command;
 use tokio::time::timeout;
@@ -76,6 +77,8 @@ pub struct SuggestDockerCommandsResponse {
 const AI_MODELS_DIR_RELATIVE: &str = "ai/models";
 const MODEL_METADATA_FILE_NAME: &str = "assistant-model.json";
 const MODEL_TEMP_FILE_NAME: &str = "assistant.gguf.part";
+
+pub const AI_ASSISTANT_INSTALL_STATUS_EVENT: &str = "ai-assistant-install-status";
 
 struct AiModelManifest {
     display_name: &'static str,
@@ -175,6 +178,38 @@ fn get_progress_defaults(_paths: &AiModelPaths, total_bytes: Option<u64>) -> AiI
     }
 }
 
+fn compute_percent(downloaded_bytes: u64, total_bytes: Option<u64>) -> Option<f32> {
+    let total = total_bytes?;
+    if total == 0 {
+        return None;
+    }
+    Some(((downloaded_bytes as f64 / total as f64) * 100.0).min(100.0) as f32)
+}
+
+fn installing_status(message: &str, progress: Option<AiInstallProgress>) -> AiAssistantStatus {
+    AiAssistantStatus {
+        state: AiAssistantInstallState::Installing,
+        model_name: ASSISTANT_MODEL.display_name.to_string(),
+        model_size_label: ASSISTANT_MODEL.size_label.to_string(),
+        message: Some(message.to_string()),
+        progress,
+    }
+}
+
+fn error_status(message: &str, progress: Option<AiInstallProgress>) -> AiAssistantStatus {
+    AiAssistantStatus {
+        state: AiAssistantInstallState::Error,
+        model_name: ASSISTANT_MODEL.display_name.to_string(),
+        model_size_label: ASSISTANT_MODEL.size_label.to_string(),
+        message: Some(message.to_string()),
+        progress,
+    }
+}
+
+fn emit_install_status(app: &AppHandle, status: &AiAssistantStatus) {
+    let _ = app.emit(AI_ASSISTANT_INSTALL_STATUS_EVENT, status.clone());
+}
+
 async fn download_model_to_disk(app: &AppHandle) -> Result<AiModelMetadata, String> {
     let paths = resolve_ai_model_paths(app)?;
     let model_dir = paths
@@ -188,44 +223,107 @@ async fn download_model_to_disk(app: &AppHandle) -> Result<AiModelMetadata, Stri
     // Remove any leftover partial file before we start.
     let _ = fs::remove_file(&temp_path);
 
+    emit_install_status(app, &installing_status("Starting download…", None));
+
     let client = reqwest::Client::new();
-    let response = client
-        .get(ASSISTANT_MODEL.download_url)
-        .send()
-        .await
-        .map_err(|error| format!("Failed to download model: {error}"))?;
+    let response = match client.get(ASSISTANT_MODEL.download_url).send().await {
+        Ok(value) => value,
+        Err(error) => {
+            let message = format!("Failed to download model: {error}");
+            emit_install_status(app, &error_status(&message, None));
+            return Err(message);
+        }
+    };
 
     if !response.status().is_success() {
-        return Err(format!(
+        let message = format!(
             "Model download failed with status: {}",
             response.status()
-        ));
+        );
+        emit_install_status(app, &error_status(&message, None));
+        return Err(message);
     }
 
     let total_bytes = response.content_length();
-    let progress = get_progress_defaults(&paths, total_bytes);
+    let mut progress = get_progress_defaults(&paths, total_bytes);
     let mut downloaded_bytes = progress.downloaded_bytes;
 
-    let mut file = tokio::fs::File::create(&temp_path)
-        .await
-        .map_err(|error| format!("Failed to create temp model file: {error}"))?;
+    emit_install_status(
+        app,
+        &installing_status(
+            "Downloading assistant model…",
+            Some(AiInstallProgress {
+                downloaded_bytes,
+                total_bytes,
+                percent: compute_percent(downloaded_bytes, total_bytes),
+            }),
+        ),
+    );
+
+    let mut file = match tokio::fs::File::create(&temp_path).await {
+        Ok(value) => value,
+        Err(error) => {
+            let message = format!("Failed to create temp model file: {error}");
+            emit_install_status(app, &error_status(&message, Some(progress.clone())));
+            return Err(message);
+        }
+    };
 
     let mut hasher = Sha256::new();
     let mut stream = response.bytes_stream();
     use futures_util::StreamExt;
 
+    let mut last_emit = Instant::now();
+    let mut last_emit_bytes = downloaded_bytes;
+    const PROGRESS_EMIT_MIN_INTERVAL: Duration = Duration::from_millis(200);
+    const PROGRESS_EMIT_MIN_DELTA_BYTES: u64 = 512 * 1024;
+
     while let Some(chunk) = stream.next().await {
-        let chunk = chunk.map_err(|error| format!("Download stream error: {error}"))?;
+        let chunk = match chunk {
+            Ok(value) => value,
+            Err(error) => {
+                let message = format!("Download stream error: {error}");
+                emit_install_status(app, &error_status(&message, Some(progress.clone())));
+                return Err(message);
+            }
+        };
         file.write_all(&chunk)
             .await
-            .map_err(|error| format!("Failed writing temp model file: {error}"))?;
+            .map_err(|error| {
+                let message = format!("Failed writing temp model file: {error}");
+                emit_install_status(app, &error_status(&message, Some(progress.clone())));
+                message
+            })?;
         hasher.update(&chunk);
         downloaded_bytes = downloaded_bytes.saturating_add(chunk.len() as u64);
+
+        progress.downloaded_bytes = downloaded_bytes;
+        progress.percent = compute_percent(downloaded_bytes, total_bytes);
+
+        let delta = downloaded_bytes.saturating_sub(last_emit_bytes);
+        if delta >= PROGRESS_EMIT_MIN_DELTA_BYTES || last_emit.elapsed() >= PROGRESS_EMIT_MIN_INTERVAL
+        {
+            emit_install_status(
+                app,
+                &installing_status("Downloading assistant model…", Some(progress.clone())),
+            );
+            last_emit = Instant::now();
+            last_emit_bytes = downloaded_bytes;
+        }
     }
 
     file.flush()
         .await
-        .map_err(|error| format!("Failed flushing temp model file: {error}"))?;
+        .map_err(|error| {
+            let message = format!("Failed flushing temp model file: {error}");
+            emit_install_status(app, &error_status(&message, Some(progress.clone())));
+            message
+        })?;
+
+    emit_install_status(
+        app,
+        &installing_status("Verifying checksum…", Some(progress.clone())),
+    );
 
     let sha_hex = format!("{:x}", hasher.finalize());
     let metadata = AiModelMetadata {
@@ -237,15 +335,26 @@ async fn download_model_to_disk(app: &AppHandle) -> Result<AiModelMetadata, Stri
     if let Some(expected) = ASSISTANT_MODEL.expected_sha256 {
         if expected != metadata.model_sha256 {
             let _ = tokio::fs::remove_file(&temp_path).await;
-            return Err("Downloaded model checksum mismatch.".to_string());
+            let message = "Downloaded model checksum mismatch.".to_string();
+            emit_install_status(app, &error_status(&message, Some(progress.clone())));
+            return Err(message);
         }
     }
+
+    emit_install_status(
+        app,
+        &installing_status("Finalizing installation…", Some(progress.clone())),
+    );
 
     // Atomically move the temp file into place.
     let _ = tokio::fs::remove_file(&paths.model_file).await;
     tokio::fs::rename(&temp_path, &paths.model_file)
         .await
-        .map_err(|error| format!("Failed moving model into place: {error}"))?;
+        .map_err(|error| {
+            let message = format!("Failed moving model into place: {error}");
+            emit_install_status(app, &error_status(&message, Some(progress.clone())));
+            message
+        })?;
 
     // Write metadata after the model is in place.
     tokio::fs::write(
@@ -253,16 +362,25 @@ async fn download_model_to_disk(app: &AppHandle) -> Result<AiModelMetadata, Stri
         serde_json::to_vec(&metadata).map_err(|error| error.to_string())?,
     )
     .await
-    .map_err(|error| format!("Failed writing model metadata: {error}"))?;
+    .map_err(|error| {
+        let message = format!("Failed writing model metadata: {error}");
+        emit_install_status(app, &error_status(&message, Some(progress.clone())));
+        message
+    })?;
 
     Ok(metadata)
 }
 
 pub async fn install_ai_assistant(app: AppHandle) -> Result<AiAssistantStatus, String> {
     // Download + validate integrity, then return installed status.
-    let result = download_model_to_disk(&app).await?;
-    let _ = result;
-    get_ai_assistant_status(app).map_err(|error| error.to_string())
+    if let Err(error) = download_model_to_disk(&app).await {
+        emit_install_status(&app, &error_status(&error, None));
+        return Err(error);
+    }
+
+    let final_status = get_ai_assistant_status(app.clone()).map_err(|error| error.to_string())?;
+    emit_install_status(&app, &final_status);
+    Ok(final_status)
 }
 
 pub async fn remove_ai_assistant(app: AppHandle) -> Result<AiAssistantStatus, String> {
@@ -511,5 +629,39 @@ mod tests {
     fn extract_json_fragment_returns_none_when_no_braces() {
         let output = "no json here";
         assert!(extract_json_fragment(output).is_none());
+    }
+
+    #[test]
+    fn compute_percent_returns_none_without_total() {
+        assert_eq!(compute_percent(50, None), None);
+        assert_eq!(compute_percent(50, Some(0)), None);
+    }
+
+    #[test]
+    fn compute_percent_clamps_to_one_hundred() {
+        assert_eq!(compute_percent(50, Some(100)), Some(50.0));
+        assert_eq!(compute_percent(200, Some(100)), Some(100.0));
+    }
+
+    #[test]
+    fn installing_status_sets_message_and_progress() {
+        let status = installing_status(
+            "Downloading assistant model…",
+            Some(AiInstallProgress {
+                downloaded_bytes: 1024,
+                total_bytes: Some(2048),
+                percent: Some(50.0),
+            }),
+        );
+
+        assert!(matches!(
+            status.state,
+            AiAssistantInstallState::Installing
+        ));
+        assert_eq!(
+            status.message.as_deref(),
+            Some("Downloading assistant model…")
+        );
+        assert_eq!(status.progress.as_ref().and_then(|p| p.percent), Some(50.0));
     }
 }
