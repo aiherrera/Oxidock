@@ -15,6 +15,71 @@ jobs:
   release-please:
     runs-on: ubuntu-latest
     steps:
-      - uses: googleapis/release-please-action@v4
+      - name: Create or update Release Please PR
+        uses: googleapis/release-please-action@v4
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Find open Release Please PR
+        id: release_pr
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          PR_JSON="$(gh pr list \
+            --repo "$GITHUB_REPOSITORY" \
+            --state open \
+            --label "autorelease: pending" \
+            --json number,headRefName \
+            --limit 1)"
+
+          HEAD_REF="$(node -e "const prs = JSON.parse(process.argv[1]); process.stdout.write(prs[0]?.headRefName ?? '')" "$PR_JSON")"
+          NUMBER="$(node -e "const prs = JSON.parse(process.argv[1]); process.stdout.write(String(prs[0]?.number ?? ''))" "$PR_JSON")"
+
+          echo "head_ref=$HEAD_REF" >> "$GITHUB_OUTPUT"
+          echo "number=$NUMBER" >> "$GITHUB_OUTPUT"
+
+      - name: Check out Release Please branch
+        if: steps.release_pr.outputs.head_ref != ''
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.release_pr.outputs.head_ref }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up pnpm
+        if: steps.release_pr.outputs.head_ref != ''
+        uses: pnpm/action-setup@v4
+
+      - name: Set up Node.js
+        if: steps.release_pr.outputs.head_ref != ''
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        if: steps.release_pr.outputs.head_ref != ''
+        run: pnpm install --frozen-lockfile
+
+      - name: Format generated release files
+        if: steps.release_pr.outputs.head_ref != ''
+        run: |
+          pnpm exec prettier \
+            package.json \
+            .release-please-manifest.json \
+            src-tauri/tauri.conf.json \
+            --write
+          pnpm format:check
+
+      - name: Push formatting fixes to Release Please PR
+        if: steps.release_pr.outputs.head_ref != ''
+        run: |
+          if git diff --quiet; then
+            echo "Release Please PR files already satisfy formatting checks."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add package.json .release-please-manifest.json src-tauri/tauri.conf.json
+          git commit -m "chore: format generated release files"
+          git push origin "HEAD:${{ steps.release_pr.outputs.head_ref }}"
