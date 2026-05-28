@@ -53,6 +53,15 @@ pub fn setup_menu(app: &App) -> tauri::Result<()> {
     let help_submenu = SubmenuBuilder::new(app, "Help")
         .text("navigate_docs", "Documentation")
         .build()?;
+    let edit_submenu = SubmenuBuilder::new(app, "Edit")
+        .undo()
+        .redo()
+        .separator()
+        .cut()
+        .copy()
+        .paste()
+        .select_all()
+        .build()?;
 
     let mut menu_builder = MenuBuilder::new(app);
 
@@ -86,6 +95,7 @@ pub fn setup_menu(app: &App) -> tauri::Result<()> {
     }
 
     let menu = menu_builder
+        .item(&edit_submenu)
         .item(&view_submenu)
         .item(&docker_submenu)
         .item(&help_submenu)
