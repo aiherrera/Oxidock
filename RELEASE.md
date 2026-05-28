@@ -62,11 +62,11 @@ Only repository maintainers configure signing and publish signed macOS builds. O
 
 ### Overview
 
-| Workflow                                               | Purpose                                                             |
-| ------------------------------------------------------ | ------------------------------------------------------------------- |
-| [CI](.github/workflows/ci.yml)                         | Lint, test, build — no signing                                      |
-| [Release Please](.github/workflows/release-please.yml) | Release PR, changelog, version bumps, git tag (no GitHub Release)   |
-| [Release](.github/workflows/release.yml)               | Validate, then build universal macOS, sign, notarize, upload assets |
+| Workflow                                               | Purpose                                                                 |
+| ------------------------------------------------------ | ----------------------------------------------------------------------- |
+| [CI](.github/workflows/ci.yml)                         | Lint, test, build — no signing                                          |
+| [Release Please](.github/workflows/release-please.yml) | Release PR, changelog, version bumps, release-file formatting, git tag  |
+| [Release](.github/workflows/release.yml)               | Normalize generated formatting, validate, sign, notarize, upload assets |
 
 Signed release jobs use secrets configured in **Settings → Secrets and variables → Actions**. Secret **names** are listed below; values are stored only in GitHub and must not appear in the repo, logs, or issues.
 
@@ -90,9 +90,9 @@ Maintain signing assets locally on a trusted machine. Store encoded certificate 
 ### Cutting a signed release
 
 1. Ensure merged PRs on `main` use Conventional Commit titles so the Release PR reflects the right changes.
-2. Review the open **Release PR** created by [Release Please](.github/workflows/release-please.yml) (version bumps, [CHANGELOG.md](CHANGELOG.md), all three version files). Edit the Release PR if needed before merging.
-3. **Merge the Release PR** on the default branch. Release Please creates the `v<version>` tag (`skip-github-release` is enabled so it does not create a duplicate GitHub Release).
-4. Watch the **Release** workflow on the new tag. It validates, then builds a **universal** macOS binary (`universal-apple-darwin`), signs, notarizes, and uploads `.dmg` / `.app.tar.gz` assets to GitHub Releases.
+2. Review the open **Release PR** created by [Release Please](.github/workflows/release-please.yml) (version bumps, [CHANGELOG.md](CHANGELOG.md), all three version files). The workflow formats generated release files on the Release PR branch before merge.
+3. **Merge the Release PR** on the default branch (squash merge is fine). Release Please creates the `v<version>` tag (`skip-github-release` is enabled so it does not create a duplicate GitHub Release).
+4. Watch the **Release** workflow on the new tag. It normalizes generated formatting, validates, then builds a **universal** macOS binary (`universal-apple-darwin`), signs, notarizes, and uploads `.dmg` / `.app.tar.gz` assets to GitHub Releases.
 
 **Manual Release workflow** (tag must already exist on the remote): Actions → **Release** → **Run workflow** → enter tag (e.g. `v0.1.1`).
 
