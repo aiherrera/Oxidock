@@ -65,9 +65,9 @@ Only repository maintainers configure signing and publish signed macOS builds. O
 
 ### Overview
 
-| Workflow | Purpose |
-|----------|---------|
-| [CI](.github/workflows/ci.yml) | Lint, test, build — no signing |
+| Workflow                                 | Purpose                                                             |
+| ---------------------------------------- | ------------------------------------------------------------------- |
+| [CI](.github/workflows/ci.yml)           | Lint, test, build — no signing                                      |
 | [Release](.github/workflows/release.yml) | Validate, then build universal macOS, sign, notarize, upload assets |
 
 Signed release jobs use secrets configured in **Settings → Secrets and variables → Actions**. Secret **names** are listed below; values are stored only in GitHub and must not appear in the repo, logs, or issues.
@@ -78,14 +78,14 @@ The app bundle identifier is public: `com.aiherrera.oxidock` (see [`src-tauri/ta
 
 Configure these secrets for [`.github/workflows/release.yml`](.github/workflows/release.yml). Do not commit values or paste them into PRs.
 
-| Secret | Purpose |
-|--------|---------|
-| `APPLE_CERTIFICATE` | Signing certificate material (stored as a GitHub secret, not in git) |
-| `APPLE_CERTIFICATE_PASSWORD` | Password for the certificate export |
-| `APPLE_SIGNING_IDENTITY` | (Optional) Developer ID Application identity when multiple exist in the runner keychain |
-| `APPLE_ID` | Apple ID used for notarization |
-| `APPLE_PASSWORD` | App-specific password for notarization |
-| `APPLE_TEAM_ID` | Apple Developer Team ID |
+| Secret                       | Purpose                                                                                 |
+| ---------------------------- | --------------------------------------------------------------------------------------- |
+| `APPLE_CERTIFICATE`          | Signing certificate material (stored as a GitHub secret, not in git)                    |
+| `APPLE_CERTIFICATE_PASSWORD` | Password for the certificate export                                                     |
+| `APPLE_SIGNING_IDENTITY`     | (Optional) Developer ID Application identity when multiple exist in the runner keychain |
+| `APPLE_ID`                   | Apple ID used for notarization                                                          |
+| `APPLE_PASSWORD`             | App-specific password for notarization                                                  |
+| `APPLE_TEAM_ID`              | Apple Developer Team ID                                                                 |
 
 Maintain signing assets locally on a trusted machine. Store encoded certificate material only in GitHub Actions secrets—never in the repository. Rotate credentials if exposure is suspected.
 
