@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { DockerCommandId } from "../lib/docker-command-registry";
-import { isExited, isRunning, normalizeState } from "../lib/container-utils";
+import { getContainerActionAvailability } from "../lib/container-action-availability";
 import { toErrorMessage } from "../lib/search-utils";
 import type { ContainerInfo } from "../types/docker";
 import { removeContainer, restartContainer, startContainer, stopContainer } from "../lib/tauri-docker";
@@ -60,9 +60,9 @@ export function ContainerActions({
     setRemoveDialogOpen(false);
   }, [container.id]);
 
-  const state = normalizeState(container.state);
-  const canRemove = state !== "removing";
-  const forceRemove = !isExited(container);
+  const availability = getContainerActionAvailability(container);
+  const canRemove = availability.canRemove;
+  const forceRemove = availability.forceRemove;
 
   const actions: ActionConfig[] = [
     {
@@ -78,7 +78,7 @@ export function ContainerActions({
       id: "containers.logs",
       label: "Logs",
       icon: <IconTerminal className="size-4" />,
-      enabled: isRunning(container),
+      enabled: availability.canViewLogs,
       run: async () => {
         onLogsTab();
       },
@@ -87,21 +87,21 @@ export function ContainerActions({
       id: "containers.start",
       label: "Start",
       icon: <IconPlay className="size-4" />,
-      enabled: isExited(container),
+      enabled: availability.canStart,
       run: () => startContainer(container.id),
     },
     {
       id: "containers.stop",
       label: "Stop",
       icon: <IconStop className="size-4" />,
-      enabled: isRunning(container),
+      enabled: availability.canStop,
       run: () => stopContainer(container.id),
     },
     {
       id: "containers.restart",
       label: "Restart",
       icon: <IconRefresh className="size-4" />,
-      enabled: isRunning(container),
+      enabled: availability.canRestart,
       run: () => restartContainer(container.id),
     },
     {

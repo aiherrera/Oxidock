@@ -14,6 +14,7 @@ type InspectorTab = "overview" | "logs" | "inspect" | "stats";
 type ContainerInspectorProps = {
   container: ContainerInfo;
   stats: ContainerStatsInfo | null;
+  initialTab?: InspectorTab;
   onClose: () => void;
   onRefresh: () => Promise<void>;
 };
@@ -25,7 +26,7 @@ const tabs: { id: InspectorTab; label: string }[] = [
   { id: "stats", label: "Stats" },
 ];
 
-export function ContainerInspector({ container, stats, onClose, onRefresh }: ContainerInspectorProps) {
+export function ContainerInspector({ container, stats, initialTab, onClose, onRefresh }: ContainerInspectorProps) {
   const [activeTab, setActiveTab] = useState<InspectorTab>("overview");
   const [detail, setDetail] = useState<ContainerInspectDetail | null>(null);
   const [logs, setLogs] = useState<string>("");
@@ -35,11 +36,11 @@ export function ContainerInspector({ container, stats, onClose, onRefresh }: Con
   const copyTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
-    setActiveTab("overview");
+    setActiveTab(initialTab ?? "overview");
     setDetail(null);
     setLogs("");
     setErrorMessage(null);
-  }, [container.id]);
+  }, [container.id, initialTab]);
 
   useEffect(() => {
     if (activeTab === "stats") {

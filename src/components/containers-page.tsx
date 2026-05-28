@@ -8,10 +8,19 @@ import { aggregateStats, buildTableRows, countRunning, filterContainers, isRunni
 import { toErrorMessage } from "../lib/search-utils";
 import { alertDanger } from "../lib/theme-classes";
 import { useDockerContainersChanged } from "../lib/docker-change-events";
-import { fetchContainerStats, fetchContainers } from "../lib/tauri-docker";
+import {
+  fetchContainerStats,
+  fetchContainers,
+  removeContainer,
+  restartContainer,
+  startContainer,
+  stopContainer,
+} from "../lib/tauri-docker";
 import type { ContainerInfo, ContainerStatsInfo, DockerStatus } from "../types/docker";
 
 const STATS_POLL_MS = 2000;
+
+type InspectorTab = "overview" | "logs" | "inspect" | "stats";
 
 type ContainersPageProps = {
   dockerStatus: DockerStatus | null;
@@ -25,6 +34,7 @@ export function ContainersPage({ dockerStatus, engineRevision, searchQuery }: Co
   const [expandedProjects, setExpandedProjects] = useState<Set<string>>(() => new Set());
   const [showAllContainers, setShowAllContainers] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedInitialTab, setSelectedInitialTab] = useState<InspectorTab | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const statsRequestIdRef = useRef(0);
@@ -165,8 +175,36 @@ export function ContainersPage({ dockerStatus, engineRevision, searchQuery }: Co
   );
 
   const toggleSelectedContainer = useCallback((id: string) => {
+    setSelectedInitialTab(null);
     setSelectedId((current) => (current === id ? null : id));
   }, []);
+
+  const openInspector = useCallback((id: string, initialTab?: InspectorTab) => {
+    setSelectedId(id);
+    setSelectedInitialTab(initialTab ?? null);
+  }, []);
+
+  const runLifecycleAction = useCallback(
+    async (label: string, action: () => Promise<void>) => {
+      setErrorMessage(null);
+      try {
+        await action();
+        await loadDashboard({ silent: true });
+      } catch (error) {
+        setErrorMessage(toErrorMessage(error, `Could not ${label.toLowerCase()}.`));
+      }
+    },
+    [loadDashboard]
+  );
+
+  const handleRemoveContainer = useCallback(
+    async (containerId: string, force: boolean) => {
+      await runLifecycleAction(force ? "force remove container" : "remove container", () =>
+        removeContainer(containerId, force)
+      );
+    },
+    [runLifecycleAction]
+  );
 
   const toggleProject = useCallback((project: string) => {
     setExpandedProjects((current) => {
@@ -213,8 +251,13 @@ export function ContainersPage({ dockerStatus, engineRevision, searchQuery }: Co
           <ContainersTable
             rows={tableRows}
             selectedId={selectedId}
-            onOpenInspector={toggleSelectedContainer}
-            onSelect={toggleSelectedContainer}
+            onSelectRow={toggleSelectedContainer}
+            onOpenInspectTab={(id) => openInspector(id, "inspect")}
+            onOpenLogsTab={(id) => openInspector(id, "logs")}
+            onStart={(id) => void runLifecycleAction("start container", () => startContainer(id))}
+            onStop={(id) => void runLifecycleAction("stop container", () => stopContainer(id))}
+            onRestart={(id) => void runLifecycleAction("restart container", () => restartContainer(id))}
+            onRequestRemove={handleRemoveContainer}
             onToggleProject={toggleProject}
           />
         )}
@@ -227,6 +270,7 @@ export function ContainersPage({ dockerStatus, engineRevision, searchQuery }: Co
           <ContainerInspector
             container={selectedContainer}
             stats={statsById.get(selectedContainer.id) ?? null}
+            initialTab={selectedInitialTab ?? undefined}
             onClose={() => setSelectedId(null)}
             onRefresh={() => loadDashboard()}
           />
