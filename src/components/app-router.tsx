@@ -8,11 +8,13 @@ import type { AppPage } from "../types/app";
 import type { DockerStatus } from "../types/docker";
 import type { ThemePreference } from "../lib/theme-settings";
 
+const DashboardPage = lazy(() => import("./dashboard-page").then((module) => ({ default: module.DashboardPage })));
 const ImagesPage = lazy(() => import("./images-page").then((module) => ({ default: module.ImagesPage })));
 const VolumesPage = lazy(() => import("./volumes-page").then((module) => ({ default: module.VolumesPage })));
 const NetworksPage = lazy(() => import("./networks-page").then((module) => ({ default: module.NetworksPage })));
 const EventsPage = lazy(() => import("./events-page").then((module) => ({ default: module.EventsPage })));
 const LogsPage = lazy(() => import("./logs-page").then((module) => ({ default: module.LogsPage })));
+const AssistantPage = lazy(() => import("./assistant-page").then((module) => ({ default: module.AssistantPage })));
 const CliPlaygroundPage = lazy(() =>
   import("./cli-playground-page").then((module) => ({ default: module.CliPlaygroundPage }))
 );
@@ -48,6 +50,7 @@ type AppRouterProps = {
   onThemePreferenceChange: (preference: ThemePreference) => void;
   onEngineChanged: (revision: number) => void;
   onOpenPlayground: (command: string) => void;
+  onNavigatePage: (page: AppPage) => void;
   onResetImagesViewMode: () => void;
   onOpenSettingsPage: () => void;
   onDocsCommandTargetConsumed: () => void;
@@ -76,11 +79,23 @@ export function AppRouter({
   onThemePreferenceChange,
   onEngineChanged,
   onOpenPlayground,
+  onNavigatePage,
   onResetImagesViewMode,
   onOpenSettingsPage,
   onDocsCommandTargetConsumed,
 }: AppRouterProps) {
   switch (activePage) {
+    case "dashboard":
+      return (
+        <Suspense fallback={<LazyPageFallback />}>
+          <DashboardPage
+            dockerStatus={dockerStatus}
+            engineRevision={engineRevision}
+            onNavigate={onNavigatePage}
+            onOpenPlayground={onOpenPlayground}
+          />
+        </Suspense>
+      );
     case "containers":
       return (
         <ContainersPage
@@ -139,6 +154,16 @@ export function AppRouter({
             dockerStatus={dockerStatus}
             engineRevision={engineRevision}
             searchQuery={searchQuery}
+          />
+        </Suspense>
+      );
+    case "assistant":
+      return (
+        <Suspense fallback={<LazyPageFallback />}>
+          <AssistantPage
+            dockerStatus={dockerStatus}
+            onOpenPlayground={onOpenPlayground}
+            onOpenSettingsPage={onOpenSettingsPage}
           />
         </Suspense>
       );

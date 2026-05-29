@@ -24,7 +24,7 @@ import type { DockerStatus } from "./types/docker";
 
 function App() {
   const { preference: themePreference, setPreference: setThemePreference } = useTheme();
-  const [activePage, setActivePage] = useState<AppPage>("containers");
+  const [activePage, setActivePage] = useState<AppPage>("dashboard");
   const [dockerStatus, setDockerStatus] = useState<DockerStatus | null>(null);
   const [engineRevision, setEngineRevision] = useState(0);
   const [searchQuery, setSearchQuery] = useState("");
@@ -165,6 +165,7 @@ function App() {
       onPlaygroundInitialCommandApplied={() => setPlaygroundCommand(undefined)}
       onPlaygroundIsRunningChange={setPlaygroundIsRunning}
       onOpenSettingsPage={() => setActivePage("settings")}
+      onNavigatePage={setActivePage}
       onResetImagesViewMode={resetImagesViewMode}
       onThemePreferenceChange={setThemePreference}
     />
@@ -182,7 +183,7 @@ function App() {
       sidebar={
         <Sidebar
           activePage={activePage}
-          autoCollapse={activePage === "cli" || activePage === "docs"}
+          autoCollapse={activePage === "cli" || activePage === "docs" || activePage === "assistant"}
           isLoading={isLoadingStatus}
           status={dockerStatus}
           onEngineChanged={handleEngineChanged}
