@@ -38,7 +38,7 @@ describe("CliAiAssistantCard", () => {
     vi.mocked(getLocalAiAssistantStatus).mockResolvedValue({
       state: "notInstalled",
       modelName: "oxidock-assist",
-      modelSizeLabel: "~200 MB",
+      modelSizeLabel: "~380 MB",
       message: null,
       progress: null,
     });
@@ -69,7 +69,7 @@ describe("CliAiAssistantCard", () => {
       payload: {
         state: "installing",
         modelName: "oxidock-assist",
-        modelSizeLabel: "~200 MB",
+        modelSizeLabel: "~380 MB",
         message: "Downloading assistant model…",
         progress: {
           downloadedBytes: 50 * 1024 * 1024,
@@ -86,7 +86,7 @@ describe("CliAiAssistantCard", () => {
     resolveInstall?.({
       state: "installed",
       modelName: "oxidock-assist",
-      modelSizeLabel: "~200 MB",
+      modelSizeLabel: "~380 MB",
       message: "Local assistant model is installed.",
       progress: null,
     });
@@ -113,7 +113,7 @@ describe("CliAiAssistantCard", () => {
     vi.mocked(installLocalAiAssistant).mockResolvedValue({
       state: "installed",
       modelName: "oxidock-assist",
-      modelSizeLabel: "~200 MB",
+      modelSizeLabel: "~380 MB",
       message: "Local assistant model is installed.",
       progress: null,
     });

@@ -97,14 +97,26 @@ function InstallProgressPanel({
   );
 }
 
-export function CliAiAssistantCard() {
+type CliAiAssistantCardProps = {
+  onStatusChange?: (status: LocalAiAssistantStatus) => void;
+};
+
+export function CliAiAssistantCard({ onStatusChange }: CliAiAssistantCardProps) {
   const [status, setStatus] = useState<LocalAiAssistantStatus>(defaultLocalAiAssistantStatus);
+
+  const updateStatus = useCallback(
+    (next: LocalAiAssistantStatus) => {
+      setStatus(next);
+      onStatusChange?.(next);
+    },
+    [onStatusChange]
+  );
 
   useEffect(() => {
     void getLocalAiAssistantStatus()
-      .then((next) => setStatus(next))
-      .catch(() => setStatus(defaultLocalAiAssistantStatus));
-  }, []);
+      .then(updateStatus)
+      .catch(() => updateStatus(defaultLocalAiAssistantStatus));
+  }, [updateStatus]);
 
   const isInstalling = status.state === "installing";
 
@@ -119,7 +131,7 @@ export function CliAiAssistantCard() {
     const setup = async () => {
       unlisten = await listenLocalAiAssistantInstallStatus((next) => {
         if (!disposed) {
-          setStatus(next);
+          updateStatus(next);
         }
       });
 
@@ -134,49 +146,51 @@ export function CliAiAssistantCard() {
       disposed = true;
       unlisten?.();
     };
-  }, [isInstalling]);
+  }, [isInstalling, updateStatus]);
 
   const handleInstall = useCallback(async () => {
-    setStatus((current) => ({
-      ...current,
+    const installingStatus: LocalAiAssistantStatus = {
+      ...status,
       state: "installing",
       message: "Starting download…",
       progress: null,
-    }));
+    };
+    updateStatus(installingStatus);
 
     try {
       const next = await installLocalAiAssistant();
-      setStatus(next);
+      updateStatus(next);
     } catch (error) {
-      setStatus((current) => ({
-        ...current,
+      updateStatus({
+        ...installingStatus,
         state: "error",
         message: getInvokeErrorMessage(error, "Install failed. Try again later."),
         progress: null,
-      }));
+      });
     }
-  }, []);
+  }, [status, updateStatus]);
 
   const handleUninstall = useCallback(async () => {
-    setStatus((current) => ({
-      ...current,
+    const removingStatus: LocalAiAssistantStatus = {
+      ...status,
       state: "installing",
       message: "Removing assistant…",
       progress: null,
-    }));
+    };
+    updateStatus(removingStatus);
 
     try {
       const next = await uninstallLocalAiAssistant();
-      setStatus(next);
+      updateStatus(next);
     } catch (error) {
-      setStatus((current) => ({
-        ...current,
+      updateStatus({
+        ...removingStatus,
         state: "error",
         message: getInvokeErrorMessage(error, "Remove failed. Try again later."),
         progress: null,
-      }));
+      });
     }
-  }, []);
+  }, [status, updateStatus]);
 
   const isInstalled = status.state === "installed";
 
