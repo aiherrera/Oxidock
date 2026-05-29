@@ -35,21 +35,31 @@ const buildContainerRow = (container: { id: string; name: string; state: string 
 });
 
 describe("ContainersTable actions", () => {
+  const baseProps = {
+    selectedId: null as string | null,
+    isBulkSelected: () => false,
+    allVisibleSelected: false,
+    partiallyVisibleSelected: false,
+    onToggleBulkSelected: vi.fn(),
+    onToggleSelectAllVisible: vi.fn(),
+    onSelectRow: vi.fn(),
+    onOpenInspectTab: vi.fn(),
+    onOpenLogsTab: vi.fn(),
+    onStart: vi.fn(),
+    onStop: vi.fn(),
+    onRestart: vi.fn(),
+    onRequestRemove: vi.fn(),
+    onToggleProject: vi.fn(),
+  };
+
   it("opens inspect tab from Inspect quick action", () => {
     const onOpenInspectTab = vi.fn();
 
     render(
       <ContainersTable
+        {...baseProps}
         rows={[createContainer({ id: "c1", state: "running" })]}
-        selectedId={null}
-        onSelectRow={vi.fn()}
         onOpenInspectTab={onOpenInspectTab}
-        onOpenLogsTab={vi.fn()}
-        onStart={vi.fn()}
-        onStop={vi.fn()}
-        onRestart={vi.fn()}
-        onRequestRemove={vi.fn()}
-        onToggleProject={vi.fn()}
       />
     );
 
@@ -60,16 +70,8 @@ describe("ContainersTable actions", () => {
   it("disables Logs quick action when container is not running", () => {
     render(
       <ContainersTable
+        {...baseProps}
         rows={[createContainer({ id: "c1", state: "exited" })]}
-        selectedId={null}
-        onSelectRow={vi.fn()}
-        onOpenInspectTab={vi.fn()}
-        onOpenLogsTab={vi.fn()}
-        onStart={vi.fn()}
-        onStop={vi.fn()}
-        onRestart={vi.fn()}
-        onRequestRemove={vi.fn()}
-        onToggleProject={vi.fn()}
       />
     );
 
@@ -82,16 +84,9 @@ describe("ContainersTable actions", () => {
 
     render(
       <ContainersTable
+        {...baseProps}
         rows={[createContainer({ id: "c1", state: "running" })]}
-        selectedId={null}
-        onSelectRow={vi.fn()}
-        onOpenInspectTab={vi.fn()}
-        onOpenLogsTab={vi.fn()}
-        onStart={vi.fn()}
         onStop={onStop}
-        onRestart={vi.fn()}
-        onRequestRemove={vi.fn()}
-        onToggleProject={vi.fn()}
       />
     );
 
@@ -105,16 +100,9 @@ describe("ContainersTable actions", () => {
 
     render(
       <ContainersTable
+        {...baseProps}
         rows={[createContainer({ id: "c1", state: "running" })]}
-        selectedId={null}
-        onSelectRow={vi.fn()}
-        onOpenInspectTab={vi.fn()}
-        onOpenLogsTab={vi.fn()}
-        onStart={vi.fn()}
-        onStop={vi.fn()}
-        onRestart={vi.fn()}
         onRequestRemove={onRequestRemove}
-        onToggleProject={vi.fn()}
       />
     );
 
@@ -126,5 +114,23 @@ describe("ContainersTable actions", () => {
 
     // running container => force remove
     expect(onRequestRemove).toHaveBeenCalledWith("c1", true);
+  });
+
+  it("toggles bulk selection from checkbox without selecting inspector row", () => {
+    const onToggleBulkSelected = vi.fn();
+    const onSelectRow = vi.fn();
+
+    render(
+      <ContainersTable
+        {...baseProps}
+        rows={[createContainer({ id: "c1", state: "running" })]}
+        onSelectRow={onSelectRow}
+        onToggleBulkSelected={onToggleBulkSelected}
+      />
+    );
+
+    fireEvent.click(screen.getByRole("checkbox", { name: /Select my-container/i }));
+    expect(onToggleBulkSelected).toHaveBeenCalledWith("c1");
+    expect(onSelectRow).not.toHaveBeenCalled();
   });
 });

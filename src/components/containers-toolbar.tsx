@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { ContainersTotalsMetrics } from "./containers-totals-metrics";
 import type { ContainerStatsInfo } from "../types/docker";
 
@@ -6,6 +7,7 @@ type ContainersToolbarProps = {
   runningCount: number;
   totalCount: number;
   containerTotals: ContainerStatsInfo | null;
+  actions?: ReactNode;
   onShowAllChange: (showAll: boolean) => void;
 };
 
@@ -14,15 +16,18 @@ export function ContainersToolbar({
   runningCount,
   totalCount,
   containerTotals,
+  actions,
   onShowAllChange,
 }: ContainersToolbarProps) {
   return (
-    <div className="space-y-4 border-b border-(--border) px-6 py-5">
+    <div className="relative z-20 space-y-4 border-b border-(--border) bg-(--bg) px-4 py-5 sm:px-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
+        <div className="min-w-0">
           <h1 className="text-2xl font-semibold tracking-tight text-(--text-primary)">Containers</h1>
           <p className="mt-1 text-sm text-(--text-muted)">Manage your running and stopped containers.</p>
         </div>
+
+        {actions ? <div className="flex flex-wrap items-center gap-2">{actions}</div> : null}
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-4">

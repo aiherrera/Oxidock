@@ -4,6 +4,7 @@ import { getContainerHealth } from "../lib/container-utils";
 import { getContainerActionAvailability } from "../lib/container-action-availability";
 import { CopyContainerId } from "./copy-container-id";
 import { CommandTooltip } from "./command-tooltip";
+import { ResourceSelectionHeaderCheckbox, ResourceSelectionRowCheckbox } from "./resource-selection-checkbox";
 import {
   IconBox,
   IconChevronDown,
@@ -20,6 +21,11 @@ import {
 type ContainersTableProps = {
   rows: TableRow[];
   selectedId: string | null;
+  isBulkSelected: (id: string) => boolean;
+  allVisibleSelected: boolean;
+  partiallyVisibleSelected: boolean;
+  onToggleBulkSelected: (id: string) => void;
+  onToggleSelectAllVisible: () => void;
   onSelectRow: (id: string) => void;
   onOpenInspectTab: (id: string) => void;
   onOpenLogsTab: (id: string) => void;
@@ -100,6 +106,11 @@ const StatsCells = ({ stats }: { stats: ContainerStatsInfo | null }) => (
 export function ContainersTable({
   rows,
   selectedId,
+  isBulkSelected,
+  allVisibleSelected,
+  partiallyVisibleSelected,
+  onToggleBulkSelected,
+  onToggleSelectAllVisible,
   onSelectRow,
   onOpenInspectTab,
   onOpenLogsTab,
@@ -175,7 +186,13 @@ export function ContainersTable({
           </colgroup>
           <thead className="sticky top-0 z-10 bg-(--surface)">
             <tr className="whitespace-nowrap border-b border-(--border) text-left text-(--text-muted)">
-              <th className="w-10 px-4 py-3 font-medium" />
+              <th className="w-10 px-4 py-3 font-medium">
+                <ResourceSelectionHeaderCheckbox
+                  allSelected={allVisibleSelected}
+                  partiallySelected={partiallyVisibleSelected}
+                  onToggleAll={onToggleSelectAllVisible}
+                />
+              </th>
               <th className="min-w-48 px-3 py-3 font-medium">Name</th>
               <th className="min-w-36 px-3 py-3 font-medium">Container ID</th>
               <th className="min-w-40 px-3 py-3 font-medium">Image</th>
@@ -200,12 +217,11 @@ export function ContainersTable({
                     onClick={() => onToggleProject(row.project)}
                   >
                     <td className="px-4 py-3">
-                      <input
+                      <ResourceSelectionRowCheckbox
                         checked={false}
-                        className="size-4 rounded border-(--border) bg-(--surface) accent-(--accent)"
-                        type="checkbox"
-                        readOnly
-                        onClick={(event) => event.stopPropagation()}
+                        disabled
+                        label={row.project}
+                        onToggle={() => undefined}
                       />
                     </td>
                     <td className="px-3 py-3">
@@ -233,23 +249,27 @@ export function ContainersTable({
 
               const { container, stats, depth } = row;
               const selected = selectedId === container.id;
+              const bulkSelected = isBulkSelected(container.id);
               const availability = getContainerActionAvailability(container);
               const displayName = container.service ?? container.name;
 
               return (
                 <tr
                   className={`cursor-pointer border-b border-(--border) transition ${
-                    selected ? "bg-(--accent-soft) ring-1 ring-inset ring-(--accent)/40" : "hover:bg-(--surface-hover)"
+                    bulkSelected
+                      ? "bg-(--accent-soft)"
+                      : selected
+                        ? "bg-(--surface-elevated) ring-1 ring-inset ring-(--accent)/40"
+                        : "hover:bg-(--surface-hover)"
                   }`}
                   key={container.id}
                   onClick={() => onSelectRow(container.id)}
                 >
                   <td className="px-4 py-3">
-                    <input
-                      checked={selected}
-                      className="size-4 rounded border-(--border) bg-(--surface) accent-(--accent)"
-                      type="checkbox"
-                      readOnly
+                    <ResourceSelectionRowCheckbox
+                      checked={bulkSelected}
+                      label={displayName}
+                      onToggle={() => onToggleBulkSelected(container.id)}
                     />
                   </td>
                   <td className="px-3 py-3">

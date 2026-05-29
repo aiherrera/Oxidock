@@ -1,13 +1,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { BulkDeleteDialog } from "./bulk-delete-dialog";
 import { ContainerInspector } from "./container-inspector";
 import { ContainersTable } from "./containers-table";
 import { ContainersToolbar } from "./containers-toolbar";
 import { OverviewFooter } from "./overview-footer";
 import { PageLoadingSkeleton } from "./page-shell";
+import { ResourceBulkActionsBar } from "./resource-bulk-actions-bar";
 import { aggregateStats, buildTableRows, countRunning, filterContainers, isRunning } from "../lib/container-utils";
 import { toErrorMessage } from "../lib/search-utils";
 import { alertDanger } from "../lib/theme-classes";
 import { useDockerContainersChanged } from "../lib/docker-change-events";
+import { useBulkResourceDelete } from "../hooks/use-bulk-resource-delete";
 import {
   fetchContainerStats,
   fetchContainers,
@@ -105,6 +108,12 @@ export function ContainersPage({ dockerStatus, engineRevision, searchQuery }: Co
       }),
     [containers, showAllContainers, searchQuery]
   );
+
+  const bulkDelete = useBulkResourceDelete({
+    items: filteredContainers,
+    getKey: (container) => container.id,
+    toDeleteEntry: (container) => ({ kind: "container", item: container }),
+  });
 
   const runningContainerIds = useMemo(
     () => containers.filter(isRunning).map((container) => container.id),
@@ -234,6 +243,18 @@ export function ContainersPage({ dockerStatus, engineRevision, searchQuery }: Co
     <>
       <div className="flex min-h-0 flex-1 flex-col">
         <ContainersToolbar
+          actions={
+            <ResourceBulkActionsBar
+              allVisibleSelected={bulkDelete.selection.isAllSelected(bulkDelete.visibleKeys)}
+              isDeleting={bulkDelete.isDeleting}
+              resourceLabel="container"
+              selectedCount={bulkDelete.selectedEntries.length}
+              visibleCount={bulkDelete.visibleKeys.length}
+              onClearSelection={bulkDelete.selection.clear}
+              onDelete={bulkDelete.openDeleteDialog}
+              onSelectAllVisible={bulkDelete.toggleSelectAllVisible}
+            />
+          }
           containerTotals={containerTotals}
           runningCount={runningCount}
           showAll={showAllContainers}
@@ -241,8 +262,10 @@ export function ContainersPage({ dockerStatus, engineRevision, searchQuery }: Co
           onShowAllChange={setShowAllContainers}
         />
 
-        {errorMessage ? (
-          <div className={`mx-6 mt-4 rounded-lg px-4 py-3 text-sm ${alertDanger}`}>{errorMessage}</div>
+        {errorMessage || bulkDelete.deleteErrorMessage ? (
+          <div className={`mx-6 mt-4 rounded-lg px-4 py-3 text-sm ${alertDanger}`}>
+            {errorMessage ?? bulkDelete.deleteErrorMessage}
+          </div>
         ) : null}
 
         {isLoading ? (
@@ -251,6 +274,11 @@ export function ContainersPage({ dockerStatus, engineRevision, searchQuery }: Co
           <ContainersTable
             rows={tableRows}
             selectedId={selectedId}
+            allVisibleSelected={bulkDelete.selection.isAllSelected(bulkDelete.visibleKeys)}
+            partiallyVisibleSelected={bulkDelete.selection.isPartiallySelected(bulkDelete.visibleKeys)}
+            isBulkSelected={bulkDelete.selection.isSelected}
+            onToggleBulkSelected={bulkDelete.selection.toggle}
+            onToggleSelectAllVisible={bulkDelete.toggleSelectAllVisible}
             onSelectRow={toggleSelectedContainer}
             onOpenInspectTab={(id) => openInspector(id, "inspect")}
             onOpenLogsTab={(id) => openInspector(id, "logs")}
@@ -264,6 +292,25 @@ export function ContainersPage({ dockerStatus, engineRevision, searchQuery }: Co
 
         <OverviewFooter statusLabel={footerStatusLabel} />
       </div>
+
+      <BulkDeleteDialog
+        description="This permanently removes the selected containers. Running containers may be force-stopped during removal."
+        isDeleting={bulkDelete.isDeleting}
+        itemLabels={bulkDelete.selectedLabels}
+        open={bulkDelete.dialogOpen}
+        title="Delete selected containers?"
+        onCancel={bulkDelete.closeDeleteDialog}
+        onConfirm={() =>
+          void bulkDelete.confirmDelete({
+            onComplete: async () => {
+              if (selectedId && bulkDelete.selection.isSelected(selectedId)) {
+                setSelectedId(null);
+              }
+              await loadDashboard({ silent: true });
+            },
+          })
+        }
+      />
 
       {selectedContainer ? (
         <div className="pointer-events-none absolute inset-y-0 right-0 z-30 flex">
