@@ -43,7 +43,7 @@ export const SHORTCUT_ACTION_LABELS: Record<ShortcutActionId, string> = {
   navigateEvents: "Go to Events",
   navigateLogs: "Go to Logs",
   navigateCli: "Go to CLI Playground",
-  navigateDocs: "Go to Docs",
+  navigateDocs: "Go to Command School",
 };
 
 const NAVIGATION_ACTION_TO_PAGE: Record<

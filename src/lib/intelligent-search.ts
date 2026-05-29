@@ -253,10 +253,12 @@ const searchLocalResources = (query: string, snapshot: LocalDockerSnapshot): Int
   }
 
   const pageMatches: { page: AppPage; label: string; keywords: string[] }[] = [
+    { page: "dashboard", label: "Dashboard", keywords: ["dashboard", "overview", "home"] },
     { page: "logs", label: "Logs", keywords: ["log", "logs", "stdout"] },
     { page: "events", label: "Events", keywords: ["event", "events", "monitor"] },
     { page: "cli", label: "CLI Playground", keywords: ["cli", "command", "playground"] },
-    { page: "docs", label: "Docs", keywords: ["docs", "lesson", "learn", "course"] },
+    { page: "docs", label: "Command School", keywords: ["docs", "lesson", "learn", "course", "command school"] },
+    { page: "assistant", label: "AI Assistant", keywords: ["assistant", "ai", "help"] },
   ];
 
   for (const match of pageMatches) {
