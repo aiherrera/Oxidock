@@ -538,6 +538,37 @@ export const IconMoon = ({ className = "size-4" }: IconProps) => (
   </svg>
 );
 
+export const IconAssistant = ({ className = "size-4" }: IconProps) => (
+  <svg
+    className={className}
+    viewBox="0 0 24 24"
+    fill="none"
+    aria-hidden
+  >
+    <path
+      d="M12 3l1.2 3.6L17 7.8l-3 2.6.9 3.6L12 12.4 9.1 14l.9-3.6-3-2.6 3.8-1.2L12 3Z"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinejoin="round"
+    />
+    <path
+      d="M6 18.5h12M8.5 21h7"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+    />
+    <rect
+      x="4"
+      y="14"
+      width="16"
+      height="4.5"
+      rx="1.5"
+      stroke="currentColor"
+      strokeWidth="1.5"
+    />
+  </svg>
+);
+
 export const IconBook = ({ className = "size-4" }: IconProps) => (
   <svg
     className={className}
@@ -563,6 +594,168 @@ export const IconBook = ({ className = "size-4" }: IconProps) => (
       stroke="currentColor"
       strokeWidth="1.5"
       strokeLinecap="round"
+    />
+  </svg>
+);
+
+export const IconDashboard = ({ className = "size-4" }: IconProps) => (
+  <svg
+    className={className}
+    viewBox="0 0 24 24"
+    fill="none"
+    aria-hidden
+  >
+    <rect
+      x="3"
+      y="3"
+      width="8"
+      height="8"
+      rx="1.5"
+      stroke="currentColor"
+      strokeWidth="1.5"
+    />
+    <rect
+      x="13"
+      y="3"
+      width="8"
+      height="5"
+      rx="1.5"
+      stroke="currentColor"
+      strokeWidth="1.5"
+    />
+    <rect
+      x="13"
+      y="10"
+      width="8"
+      height="11"
+      rx="1.5"
+      stroke="currentColor"
+      strokeWidth="1.5"
+    />
+    <rect
+      x="3"
+      y="13"
+      width="8"
+      height="8"
+      rx="1.5"
+      stroke="currentColor"
+      strokeWidth="1.5"
+    />
+  </svg>
+);
+
+export const IconCommandSchool = ({ className = "size-4" }: IconProps) => (
+  <svg
+    className={className}
+    viewBox="0 0 24 24"
+    fill="none"
+    aria-hidden
+  >
+    <path
+      d="M4 7.5 12 3l8 4.5-8 4.5-8-4.5Z"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinejoin="round"
+    />
+    <path
+      d="M6 10.5V16l6 3.5 6-3.5v-5.5"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+    <path
+      d="M18 7.5V12"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+    />
+  </svg>
+);
+
+export const IconCpu = ({ className = "size-4" }: IconProps) => (
+  <svg
+    className={className}
+    viewBox="0 0 24 24"
+    fill="none"
+    aria-hidden
+  >
+    <rect
+      x="7"
+      y="7"
+      width="10"
+      height="10"
+      rx="1.5"
+      stroke="currentColor"
+      strokeWidth="1.5"
+    />
+    <path
+      d="M9 4v2M12 4v2M15 4v2M9 18v2M12 18v2M15 18v2M4 9h2M4 12h2M4 15h2M18 9h2M18 12h2M18 15h2"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+    />
+  </svg>
+);
+
+export const IconMemory = ({ className = "size-4" }: IconProps) => (
+  <svg
+    className={className}
+    viewBox="0 0 24 24"
+    fill="none"
+    aria-hidden
+  >
+    <rect
+      x="4"
+      y="6"
+      width="16"
+      height="12"
+      rx="1.5"
+      stroke="currentColor"
+      strokeWidth="1.5"
+    />
+    <path
+      d="M8 6V4M12 6V4M16 6V4M8 18v2M12 18v2M16 18v2"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+    />
+    <path
+      d="M7 10h10M7 14h10"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+    />
+  </svg>
+);
+
+export const IconDisk = ({ className = "size-4" }: IconProps) => (
+  <svg
+    className={className}
+    viewBox="0 0 24 24"
+    fill="none"
+    aria-hidden
+  >
+    <rect
+      x="4"
+      y="5"
+      width="16"
+      height="14"
+      rx="2"
+      stroke="currentColor"
+      strokeWidth="1.5"
+    />
+    <circle
+      cx="12"
+      cy="12"
+      r="3"
+      stroke="currentColor"
+      strokeWidth="1.5"
+    />
+    <path
+      d="M4 9h16"
+      stroke="currentColor"
+      strokeWidth="1.5"
     />
   </svg>
 );

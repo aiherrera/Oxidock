@@ -1,24 +1,21 @@
 import { useEffect, useState } from "react";
 import type { AppPage } from "../types/app";
-import { APP_PAGES } from "../types/app";
+import { APP_PAGE_SECTIONS, getAppPagesBySection } from "../types/app";
 import type { DockerStatus } from "../types/docker";
-import { useEngineLifecycle } from "../hooks/use-engine-lifecycle";
-import { getEngineStateColorClass, getEngineStateLabel, getSidebarLifecycleActions } from "../lib/engine-ui";
-import type { EngineLifecycleAction } from "../types/engine";
 import { BrandLogo } from "./brand-logo";
+import { SidebarResourcePanel } from "./sidebar-resource-panel";
+import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
 import {
+  IconAssistant,
   IconBox,
   IconChevronLeft,
   IconChevronRight,
-  IconBook,
+  IconCommandSchool,
+  IconDashboard,
   IconEvents,
   IconImageStack,
   IconLogs,
   IconNetwork,
-  IconPause,
-  IconPlay,
-  IconSettings,
-  IconStop,
   IconTerminal,
   IconVolume,
 } from "./icons";
@@ -34,39 +31,36 @@ type SidebarProps = {
 
 const COMPACT_SIDEBAR_QUERY = "(max-width: 1023px)";
 
+const pageDescriptions: Record<AppPage, string> = {
+  dashboard: "Scan Docker health, app insights, and the quickest next action.",
+  containers: "Inspect, search, and manage running or stopped containers.",
+  images: "Browse local images, registry results, tags, and cleanup options.",
+  volumes: "Review persistent data usage and spot orphaned Docker volumes.",
+  networks: "Map Docker networks and see how containers are connected.",
+  events: "Watch recent Docker activity as it happens across the engine.",
+  logs: "Search and read container output without leaving Oxidock.",
+  docs: "Learn practical Docker commands through guided lessons.",
+  cli: "Run Docker commands safely with history and helpful context.",
+  assistant: "Ask for Docker help grounded in your local app state.",
+  settings: "Tune app preferences, theme, and Docker engine settings.",
+};
+
 const pageIcons: Record<AppPage, typeof IconBox> = {
+  dashboard: IconDashboard,
   containers: IconBox,
   images: IconImageStack,
   volumes: IconVolume,
   networks: IconNetwork,
   events: IconEvents,
   logs: IconLogs,
+  assistant: IconAssistant,
   cli: IconTerminal,
-  docs: IconBook,
-  settings: IconSettings,
+  docs: IconCommandSchool,
+  settings: IconDashboard,
 };
 
-const lifecycleIconByAction: Record<EngineLifecycleAction, typeof IconPlay> = {
-  start: IconPlay,
-  pause: IconPause,
-  stop: IconStop,
-};
-
-export function Sidebar({
-  activePage,
-  status,
-  isLoading,
-  autoCollapse = false,
-  onEngineChanged,
-  onPageChange,
-}: SidebarProps) {
-  const isRunning = Boolean(status?.isRunning);
-  const engineLabel = status?.providerName ?? "Container engine";
+export function Sidebar({ activePage, autoCollapse = false, onPageChange }: SidebarProps) {
   const [isCompact, setIsCompact] = useState(false);
-  const { runningLifecycleAction, actionError, runLifecycleAction } = useEngineLifecycle({
-    providerId: status?.providerId,
-    onEngineChanged,
-  });
 
   useEffect(() => {
     const mediaQuery = window.matchMedia(COMPACT_SIDEBAR_QUERY);
@@ -85,36 +79,58 @@ export function Sidebar({
   }, [autoCollapse]);
 
   const ToggleIcon = isCompact ? IconChevronRight : IconChevronLeft;
-  const overviewItems = APP_PAGES.filter((page) => page.section === "overview");
-  const toolItems = APP_PAGES.filter((page) => page.section === "tools");
-  const engineState = isLoading ? "checking" : (status?.engineState ?? "unavailable");
-  const stateLabel = getEngineStateLabel(engineState, runningLifecycleAction);
-  const stateColorClass = getEngineStateColorClass(engineState, runningLifecycleAction);
-  const lifecycleActions = getSidebarLifecycleActions(status?.engineState, status?.lifecycleCapabilities ?? []);
 
-  const renderNavItem = (page: (typeof APP_PAGES)[number]) => {
+  const renderNavItem = (page: ReturnType<typeof getAppPagesBySection>[number]) => {
     const Icon = pageIcons[page.id];
     const isActive = activePage === page.id;
+    const sectionLabel = APP_PAGE_SECTIONS.find((section) => section.id === page.section)?.label ?? "Navigate";
 
     return (
       <li key={page.id}>
-        <button
-          aria-current={isActive ? "page" : undefined}
-          aria-label={page.label}
-          className={`flex min-h-11 w-full items-center rounded-md text-sm transition ${
-            isCompact ? "justify-center px-2" : "gap-2 px-2.5"
-          } ${
-            isActive
-              ? "bg-(--accent-soft) text-(--accent)"
-              : "text-(--text-secondary) hover:bg-(--surface-hover) hover:text-(--text-primary)"
-          }`}
-          type="button"
-          title={page.label}
-          onClick={() => onPageChange(page.id)}
-        >
-          <Icon className="size-5 shrink-0" />
-          <span className={isCompact ? "sr-only" : ""}>{page.label}</span>
-        </button>
+        <Tooltip>
+          <TooltipTrigger
+            aria-current={isActive ? "page" : undefined}
+            aria-label={page.label}
+            className={`flex min-h-11 w-full items-center rounded-md text-sm transition ${
+              isCompact ? "justify-center px-2" : "gap-2 px-2.5"
+            } ${
+              isActive
+                ? "bg-(--accent-soft) text-(--accent)"
+                : "text-(--text-secondary) hover:bg-(--surface-hover) hover:text-(--text-primary)"
+            }`}
+            type="button"
+            onClick={() => onPageChange(page.id)}
+          >
+            <Icon className="size-5 shrink-0" />
+            <span className={isCompact ? "sr-only" : ""}>{page.label}</span>
+          </TooltipTrigger>
+          <TooltipContent
+            align="start"
+            className="w-72 rounded-xl border border-(--border) bg-(--surface-elevated) p-3 text-(--text-primary) shadow-2xl shadow-black/20 backdrop-blur"
+            side="right"
+            sideOffset={12}
+          >
+            <div className="flex items-start gap-3">
+              <span className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-lg border border-(--border) bg-(--surface-hover) text-(--accent)">
+                <Icon className="size-4.5" />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="flex items-center gap-2">
+                  <span className="text-sm font-semibold leading-none">{page.label}</span>
+                  {isActive ? (
+                    <span className="rounded-full border border-(--accent)/40 bg-(--accent-soft) px-2 py-0.5 text-[0.62rem] font-semibold uppercase tracking-[0.16em] text-(--accent)">
+                      Active
+                    </span>
+                  ) : null}
+                </span>
+                <span className="mt-1.5 block text-xs leading-5 text-(--text-muted)">{pageDescriptions[page.id]}</span>
+                <span className="mt-2 inline-flex rounded-full border border-(--border) px-2 py-0.5 text-[0.62rem] font-semibold uppercase tracking-[0.16em] text-(--text-muted)">
+                  {sectionLabel}
+                </span>
+              </span>
+            </div>
+          </TooltipContent>
+        </Tooltip>
       </li>
     );
   };
@@ -125,15 +141,25 @@ export function Sidebar({
         isCompact ? "w-16" : "w-64"
       }`}
     >
-      <button
-        aria-label={isCompact ? "Expand sidebar" : "Collapse sidebar"}
-        aria-pressed={!isCompact}
-        className="absolute right-0 top-14 z-50 flex size-9 translate-x-1/2 items-center justify-center rounded-full border border-(--border) bg-(--surface-elevated) text-(--text-secondary) shadow-lg transition hover:border-(--accent) hover:text-(--accent)"
-        type="button"
-        onClick={() => setIsCompact((current) => !current)}
-      >
-        <ToggleIcon className="size-5" />
-      </button>
+      <Tooltip>
+        <TooltipTrigger
+          aria-label={isCompact ? "Expand sidebar" : "Collapse sidebar"}
+          aria-pressed={!isCompact}
+          className="absolute right-0 top-14 z-50 flex size-9 translate-x-1/2 items-center justify-center rounded-full border border-(--border) bg-(--surface-elevated) text-(--text-secondary) shadow-lg transition hover:border-(--accent) hover:text-(--accent)"
+          type="button"
+          onClick={() => setIsCompact((current) => !current)}
+        >
+          <ToggleIcon className="size-5" />
+        </TooltipTrigger>
+        <TooltipContent
+          align="center"
+          className="rounded-lg border border-(--border) bg-(--surface-elevated) px-3 py-2 text-xs font-medium text-(--text-primary) shadow-xl"
+          side="right"
+          sideOffset={12}
+        >
+          {isCompact ? "Expand navigation" : "Collapse navigation"}
+        </TooltipContent>
+      </Tooltip>
 
       <div
         className={`flex items-center border-b border-(--border) py-4 ${
@@ -152,94 +178,25 @@ export function Sidebar({
       </div>
 
       <nav className="flex-1 overflow-y-auto px-2 py-4">
-        <p
-          className={`px-2 text-[0.65rem] font-semibold uppercase tracking-[0.18em] text-(--text-muted) ${
-            isCompact ? "sr-only" : ""
-          }`}
-        >
-          Overview
-        </p>
-        <ul className="mt-2 space-y-0.5">{overviewItems.map(renderNavItem)}</ul>
-
-        <p
-          className={`mt-6 px-2 text-[0.65rem] font-semibold uppercase tracking-[0.18em] text-(--text-muted) ${
-            isCompact ? "sr-only" : ""
-          }`}
-        >
-          Tools
-        </p>
-        <ul className="mt-2 space-y-0.5">{toolItems.map(renderNavItem)}</ul>
+        {APP_PAGE_SECTIONS.map((section, sectionIndex) => (
+          <div
+            className={sectionIndex > 0 ? "mt-6" : undefined}
+            key={section.id}
+          >
+            <p
+              className={`px-2 text-[0.65rem] font-semibold uppercase tracking-[0.18em] text-(--text-muted) ${
+                isCompact ? "sr-only" : ""
+              }`}
+            >
+              {section.label}
+            </p>
+            <ul className="mt-2 space-y-0.5">{getAppPagesBySection(section.id).map(renderNavItem)}</ul>
+          </div>
+        ))}
       </nav>
 
-      <div className={`border-t border-(--border) ${isCompact ? "py-1 px-3" : "p-3"}`}>
-        <div
-          className={`flex items-center rounded-lg border border-(--border) bg-(--surface) ${
-            isCompact ? "min-h-9 p-0" : "min-h-22 p-3"
-          }`}
-          title={
-            isLoading
-              ? `${engineLabel}: Checking...`
-              : isRunning
-                ? `${engineLabel}: Connected`
-                : `${engineLabel}: ${stateLabel}`
-          }
-        >
-          <div
-            className={`w-full ${
-              isCompact ? "flex items-center justify-center" : "flex items-center justify-between gap-3"
-            }`}
-          >
-            <div className={isCompact ? "flex items-center justify-center" : "min-w-0"}>
-              <p className={`text-xs font-medium text-(--text-secondary) ${isCompact ? "sr-only" : ""}`}>
-                {engineLabel}
-              </p>
-              <p className={`flex items-center gap-2 text-sm text-(--text-primary) ${isCompact ? "" : "mt-2"}`}>
-                <span
-                  className={`shrink-0 rounded-full ${isCompact ? "size-3" : "size-2"} ${
-                    isLoading ? "animate-pulse bg-slate-500" : stateColorClass
-                  }`}
-                />
-                <span className={isCompact ? "sr-only" : "truncate"}>{stateLabel}</span>
-              </p>
-              {!isCompact && actionError ? (
-                <p className="mt-2 line-clamp-2 text-xs text-red-400">{actionError}</p>
-              ) : null}
-            </div>
-            {!isCompact ? (
-              <div className="ml-auto flex shrink-0 flex-col items-end gap-2 text-right">
-                {lifecycleActions.length > 0 ? (
-                  <div className="flex justify-end gap-1.5">
-                    {lifecycleActions.map((capability) => {
-                      const ActionIcon = lifecycleIconByAction[capability.action];
-                      const isActionRunning = runningLifecycleAction === capability.action;
-                      const disabled = runningLifecycleAction !== null || isLoading;
-
-                      return (
-                        <button
-                          key={capability.action}
-                          aria-label={capability.label}
-                          className="flex size-7 items-center justify-center rounded-md border border-(--border) text-(--text-primary) transition hover:bg-(--surface-hover) disabled:cursor-not-allowed disabled:opacity-50"
-                          disabled={disabled}
-                          title={capability.label}
-                          type="button"
-                          onClick={() => void runLifecycleAction(capability)}
-                        >
-                          <ActionIcon className={`size-4 ${isActionRunning ? "animate-pulse" : ""}`} />
-                        </button>
-                      );
-                    })}
-                  </div>
-                ) : null}
-                {status?.serverVersion || status?.apiVersion ? (
-                  <div className="text-xs text-(--text-muted)">
-                    {status?.serverVersion ? <p>v{status.serverVersion}</p> : null}
-                    {status?.apiVersion ? <p>API {status.apiVersion}</p> : null}
-                  </div>
-                ) : null}
-              </div>
-            ) : null}
-          </div>
-        </div>
+      <div className={`border-t border-(--border) ${isCompact ? "px-2 py-2" : "p-3"}`}>
+        <SidebarResourcePanel compact={isCompact} />
       </div>
     </aside>
   );
