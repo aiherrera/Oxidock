@@ -1,5 +1,25 @@
 # Changelog
 
+## [0.3.0](https://github.com/aiherrera/Oxidock/compare/v0.2.0...v0.3.0) (2026-05-30)
+
+
+### Features
+
+* **tauri:** Add resource deletes and app insights assistant ([bed6a55](https://github.com/aiherrera/Oxidock/commit/bed6a55afd9677afac49ff7b67b44e5ecdc3701c))
+* **ui:** Add AI Elements chat components ([6679215](https://github.com/aiherrera/Oxidock/commit/6679215a3fbcb6d6449c01e40d8531fdfc7c3bca))
+* **ui:** Add app insights assistant experience ([b714030](https://github.com/aiherrera/Oxidock/commit/b714030af2edc7e3620077d5656481315001db6a))
+* **ui:** Add bulk resource selection and deletion ([eeb0c98](https://github.com/aiherrera/Oxidock/commit/eeb0c987be225d8bbc5f4fab61bd537090d8e636))
+* **ui:** Add dashboard and assistant navigation ([a9f5ccd](https://github.com/aiherrera/Oxidock/commit/a9f5ccdeb799eee18f916b0578335f554b28f060))
+* **ui:** Add Docker dashboard overview ([f3d3009](https://github.com/aiherrera/Oxidock/commit/f3d300997d1c725fe498eb665a84570c7c53475b))
+* **ui:** Add sidebar resource panel and navigation icons ([89be516](https://github.com/aiherrera/Oxidock/commit/89be5167c76f4cdb7077fdbbd2a6ac3a61092e7d))
+* **ui:** Wire bulk actions into Docker resource pages ([6652175](https://github.com/aiherrera/Oxidock/commit/66521756f9dac13e35df3ca44e720bca36aa3e5b))
+
+
+### Bug Fixes
+
+* **release:** allow Release Please to create version tags ([49617dd](https://github.com/aiherrera/Oxidock/commit/49617ddff8a0af0cb79f244dd77a229bc8b52b5f))
+* **tauri:** Wrap app insights assistant invoke params ([ac2866b](https://github.com/aiherrera/Oxidock/commit/ac2866bc45a6df2f5402c04182ed547c03b3f69f))
+
 ## [0.2.0](https://github.com/aiherrera/Oxidock/compare/v0.1.0...v0.2.0) (2026-05-28)
 
 
