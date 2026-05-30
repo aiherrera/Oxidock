@@ -88,7 +88,7 @@
     "globals": "^17.6.0",
     "jsdom": "^26.1.0",
     "prettier": "^3.8.3",
-    "react-doctor": "^0.2.8",
+    "react-doctor": "^0.2.14",
     "tailwindcss": "^4.3.0",
     "typescript": "~5.8.3",
     "typescript-eslint": "^8.60.0",
