@@ -172,13 +172,15 @@ export const askAppInsightsAssistant = async ({
 
   try {
     const enhanced = await invoke<AppInsightsResponse>("ask_app_insights_assistant", {
-      question: trimmed,
-      contextJson: JSON.stringify(snapshot),
-      deterministicAnswer: fallback.answer,
-      deterministicReasoning: fallback.reasoning ?? null,
-      deterministicSources: fallback.sources,
-      deterministicCommands: fallback.suggestedCommands,
-      deterministicStackTraces: fallback.stackTraces,
+      params: {
+        question: trimmed,
+        contextJson: JSON.stringify(snapshot),
+        deterministicAnswer: fallback.answer,
+        deterministicReasoning: fallback.reasoning ?? null,
+        deterministicSources: fallback.sources,
+        deterministicCommands: fallback.suggestedCommands,
+        deterministicStackTraces: fallback.stackTraces,
+      },
     });
 
     if (signal?.aborted) {

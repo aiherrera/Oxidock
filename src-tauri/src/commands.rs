@@ -6,8 +6,7 @@ use crate::ai::{
     install_ai_assistant as install_ai_assistant_impl,
     remove_ai_assistant as remove_ai_assistant_impl,
     suggest_docker_commands as suggest_docker_commands_impl, AiAssistantStatus,
-    AppInsightsResponse, AppInsightsSource, AppInsightsStackTrace, AppInsightsSuggestedCommand,
-    SuggestDockerCommandsResponse,
+    AppInsightsResponse, AskAppInsightsParams, SuggestDockerCommandsResponse,
 };
 use crate::app_metrics::{
     get_app_resource_usage as get_app_resource_usage_impl, AppMetricsState, AppResourceUsage,
@@ -318,25 +317,9 @@ pub async fn suggest_docker_commands(
 #[tauri::command]
 pub async fn ask_app_insights_assistant(
     app: AppHandle,
-    question: String,
-    context_json: String,
-    deterministic_answer: String,
-    deterministic_reasoning: Option<String>,
-    deterministic_sources: Vec<AppInsightsSource>,
-    deterministic_commands: Vec<AppInsightsSuggestedCommand>,
-    deterministic_stack_traces: Vec<AppInsightsStackTrace>,
+    params: AskAppInsightsParams,
 ) -> Result<AppInsightsResponse, String> {
-    ask_app_insights_assistant_impl(
-        app,
-        question,
-        context_json,
-        deterministic_answer,
-        deterministic_reasoning,
-        deterministic_sources,
-        deterministic_commands,
-        deterministic_stack_traces,
-    )
-    .await
+    ask_app_insights_assistant_impl(app, params).await
 }
 
 #[tauri::command]

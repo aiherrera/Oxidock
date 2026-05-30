@@ -648,6 +648,25 @@ pub struct AppInsightsResponse {
     pub used_model: bool,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AppInsightsDeterministicPayload {
+    pub deterministic_answer: String,
+    pub deterministic_reasoning: Option<String>,
+    pub deterministic_sources: Vec<AppInsightsSource>,
+    pub deterministic_commands: Vec<AppInsightsSuggestedCommand>,
+    pub deterministic_stack_traces: Vec<AppInsightsStackTrace>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AskAppInsightsParams {
+    pub question: String,
+    pub context_json: String,
+    #[serde(flatten)]
+    pub deterministic: AppInsightsDeterministicPayload,
+}
+
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct RawAppInsightsCommand {
@@ -717,14 +736,21 @@ fn sanitize_suggested_commands(
 
 pub async fn ask_app_insights_assistant(
     app: AppHandle,
-    question: String,
-    context_json: String,
-    deterministic_answer: String,
-    deterministic_reasoning: Option<String>,
-    deterministic_sources: Vec<AppInsightsSource>,
-    deterministic_commands: Vec<AppInsightsSuggestedCommand>,
-    deterministic_stack_traces: Vec<AppInsightsStackTrace>,
+    params: AskAppInsightsParams,
 ) -> Result<AppInsightsResponse, String> {
+    let AskAppInsightsParams {
+        question,
+        context_json,
+        deterministic:
+            AppInsightsDeterministicPayload {
+                deterministic_answer,
+                deterministic_reasoning,
+                deterministic_sources,
+                deterministic_commands,
+                deterministic_stack_traces,
+            },
+    } = params;
+
     let fallback = AppInsightsResponse {
         answer: deterministic_answer,
         reasoning: deterministic_reasoning,

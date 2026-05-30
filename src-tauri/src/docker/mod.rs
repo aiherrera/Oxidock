@@ -539,13 +539,7 @@ impl DockerState {
     ) -> Result<(), String> {
         let docker = self.client(app, engine)?;
         docker
-            .remove_volume(
-                name,
-                Some(RemoveVolumeOptions {
-                    force,
-                    ..Default::default()
-                }),
-            )
+            .remove_volume(name, Some(RemoveVolumeOptions { force }))
             .await
             .map_err(clean_error)
     }
