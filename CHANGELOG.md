@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.4.0](https://github.com/aiherrera/Oxidock/compare/v0.3.0...v0.4.0) (2026-05-31)
+
+
+### Features
+
+* **assistant:** Add intent classification and prompt parsing ([ae27f48](https://github.com/aiherrera/Oxidock/commit/ae27f486afe5e3ba23ca031d53e212e35449ec98))
+* **assistant:** Enrich insights context and model prompts ([bd7e257](https://github.com/aiherrera/Oxidock/commit/bd7e2577a0ba86cfa79d7376a20f1b04edb068ac))
+* **search:** Improve palette navigation and shortcut labels ([e80912d](https://github.com/aiherrera/Oxidock/commit/e80912d590a4ba9079e425ffa0d246750c8e5d50))
+* **ui:** Add GitHub link to request registry commands ([741028e](https://github.com/aiherrera/Oxidock/commit/741028e3bbfe6764dc1d57c37b232912ed75c6db))
+* **ui:** Expand assistant page with attachments and chat UX ([c8a3723](https://github.com/aiherrera/Oxidock/commit/c8a372316c4345522f384c21f9d9cd818ae9b0e9))
+* **ui:** Show learn results in images unified search ([572c841](https://github.com/aiherrera/Oxidock/commit/572c8412fff58e58d5112d89597219560f232311))
+* **ui:** Wire unified search through app shell ([389be4b](https://github.com/aiherrera/Oxidock/commit/389be4b0338ab165aa97e62bb10750002efaaa7f))
+
 ## [0.3.0](https://github.com/aiherrera/Oxidock/compare/v0.2.0...v0.3.0) (2026-05-30)
 
 
