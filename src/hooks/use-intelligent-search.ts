@@ -2,13 +2,14 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   buildIntelligentSearchGroups,
   extractRegistryQuery,
-  looksLikeRegistryQuery,
+  shouldSearchRegistries,
   type LocalDockerSnapshot,
 } from "../lib/intelligent-search";
 import { useDockerContainersChanged } from "../lib/docker-change-events";
 import { toErrorMessage } from "../lib/search-utils";
 import { searchRegistryImages } from "../lib/tauri-registry";
 import { fetchContainers, fetchImages, fetchNetworks, fetchVolumes } from "../lib/tauri-docker";
+import type { AppPage } from "../types/app";
 import type { IntelligentSearchGroup } from "../types/intelligent-search";
 import type { RegistrySearchResult } from "../types/registry";
 
@@ -24,6 +25,7 @@ const SNAPSHOT_MAX_AGE_MS = 30_000;
 
 type UseIntelligentSearchOptions = {
   query: string;
+  currentPage?: AppPage;
   enabled: boolean;
   dockerRunning: boolean;
   engineRevision?: number;
@@ -31,6 +33,7 @@ type UseIntelligentSearchOptions = {
 
 export const useIntelligentSearch = ({
   query,
+  currentPage,
   enabled,
   dockerRunning,
   engineRevision = 0,
@@ -98,7 +101,7 @@ export const useIntelligentSearch = ({
 
   useEffect(() => {
     const trimmed = query.trim();
-    if (!enabled || !trimmed || !looksLikeRegistryQuery(trimmed)) {
+    if (!enabled || !trimmed || !shouldSearchRegistries(trimmed, currentPage)) {
       setRegistryResults([]);
       setRegistryMessage(null);
       setIsSearchingRegistry(false);
@@ -137,7 +140,7 @@ export const useIntelligentSearch = ({
     return () => {
       window.clearTimeout(handle);
     };
-  }, [enabled, query]);
+  }, [currentPage, enabled, query]);
 
   const groups = useMemo<IntelligentSearchGroup[]>(() => {
     const trimmed = query.trim();
@@ -148,10 +151,11 @@ export const useIntelligentSearch = ({
     return buildIntelligentSearchGroups({
       query: trimmed,
       snapshot,
+      currentPage,
       registryResults,
       includeRegistry: true,
     });
-  }, [query, registryResults, snapshot]);
+  }, [currentPage, query, registryResults, snapshot]);
 
   return {
     groups,

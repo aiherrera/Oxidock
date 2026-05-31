@@ -1,6 +1,11 @@
 import type { AppPage } from "../types/app";
 import type { ContainerInfo, ImageInfo, NetworkInfo, VolumeInfo } from "../types/docker";
-import type { IntelligentSearchGroup, IntelligentSearchResult, SearchScope } from "../types/intelligent-search";
+import type {
+  IntelligentSearchGroup,
+  IntelligentSearchResult,
+  SearchResultKind,
+  SearchScope,
+} from "../types/intelligent-search";
 import { SEARCH_SCOPE_LABELS, SEARCH_SCOPE_ORDER } from "../types/intelligent-search";
 import type { RegistrySearchResult } from "../types/registry";
 import { getIntentSuggestions } from "./docker-intent-matcher";
@@ -76,6 +81,21 @@ const scoreTextMatch = (query: string, haystack: string): number => {
 };
 
 const REGISTRY_HINTS = ["pull", "image", "registry", "hub", "docker hub", "find image", "search image"];
+
+const PAGE_RELATED_RESULT_KINDS: Partial<Record<AppPage, readonly SearchResultKind[]>> = {
+  containers: ["container", "project"],
+  images: ["image", "registry-image"],
+  volumes: ["volume"],
+  networks: ["network"],
+  docs: ["lesson", "command", "docs-link"],
+  cli: ["command"],
+};
+
+const PAGE_SCOPE_ORDER: Partial<Record<AppPage, readonly SearchScope[]>> = {
+  images: ["local", "registry", "learn", "docs"],
+  docs: ["learn", "docs", "local", "registry"],
+  cli: ["learn", "local", "registry", "docs"],
+};
 
 export const looksLikeRegistryQuery = (query: string): boolean => {
   const normalized = normalize(query);
@@ -287,7 +307,7 @@ const searchLocalResources = (query: string, snapshot: LocalDockerSnapshot): Int
   return results.sort((left, right) => right.score - left.score);
 };
 
-const searchLessonsAndCommands = (query: string): IntelligentSearchResult[] => {
+export const searchLearnResults = (query: string): IntelligentSearchResult[] => {
   const results: IntelligentSearchResult[] = [];
   const normalized = normalize(query);
   if (normalized.length < 2) {
@@ -449,13 +469,49 @@ export const mapRegistryResults = (query: string, registryResults: RegistrySearc
 export type IntelligentSearchOptions = {
   query: string;
   snapshot: LocalDockerSnapshot;
+  currentPage?: AppPage;
   registryResults?: RegistrySearchResult[];
   includeRegistry?: boolean;
 };
 
+const getPageScopeOrder = (currentPage?: AppPage): readonly SearchScope[] =>
+  (currentPage ? PAGE_SCOPE_ORDER[currentPage] : undefined) ?? SEARCH_SCOPE_ORDER;
+
+export const shouldSearchRegistries = (query: string, currentPage?: AppPage): boolean =>
+  currentPage === "images" || looksLikeRegistryQuery(query);
+
+const isPageRelatedResult = (result: IntelligentSearchResult, currentPage?: AppPage): boolean => {
+  if (!currentPage) {
+    return false;
+  }
+
+  const relatedKinds = PAGE_RELATED_RESULT_KINDS[currentPage];
+  if (relatedKinds?.includes(result.kind)) {
+    return true;
+  }
+
+  return result.action.type === "navigate" && result.action.page === currentPage && result.kind !== "page";
+};
+
+const prioritizePageRelatedResults = (
+  results: IntelligentSearchResult[],
+  currentPage?: AppPage
+): IntelligentSearchResult[] =>
+  [...results].sort((left, right) => {
+    const leftRelated = isPageRelatedResult(left, currentPage);
+    const rightRelated = isPageRelatedResult(right, currentPage);
+
+    if (leftRelated !== rightRelated) {
+      return leftRelated ? -1 : 1;
+    }
+
+    return right.score - left.score;
+  });
+
 export const buildIntelligentSearchGroups = ({
   query,
   snapshot,
+  currentPage,
   registryResults = [],
   includeRegistry = true,
 }: IntelligentSearchOptions): IntelligentSearchGroup[] => {
@@ -468,19 +524,20 @@ export const buildIntelligentSearchGroups = ({
 
   const localResults = searchLocalResources(trimmed, snapshot);
   if (localResults.length > 0) {
-    grouped.set("local", localResults.slice(0, 8));
+    grouped.set("local", prioritizePageRelatedResults(localResults, currentPage).slice(0, 8));
   }
 
-  const learnResults = searchLessonsAndCommands(trimmed);
+  const learnResults = searchLearnResults(trimmed);
   if (learnResults.length > 0) {
     grouped.set("learn", learnResults);
   }
 
-  if (includeRegistry && (looksLikeRegistryQuery(trimmed) || registryResults.length > 0)) {
+  const registryEligible = shouldSearchRegistries(trimmed, currentPage);
+  if (includeRegistry && (registryEligible || registryResults.length > 0)) {
     const registryMapped = mapRegistryResults(trimmed, registryResults);
     if (registryMapped.length > 0) {
       grouped.set("registry", registryMapped);
-    } else if (looksLikeRegistryQuery(trimmed)) {
+    } else if (registryEligible) {
       grouped.set("registry", [
         makeResult({
           id: "registry:search-action",
@@ -506,7 +563,7 @@ export const buildIntelligentSearchGroups = ({
     grouped.set("docs", docsResults);
   }
 
-  return SEARCH_SCOPE_ORDER.flatMap((scope) => {
+  return getPageScopeOrder(currentPage).flatMap((scope) => {
     const results = grouped.get(scope);
     if (!results || results.length === 0) {
       return [];

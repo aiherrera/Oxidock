@@ -58,7 +58,7 @@ export const GlobalSearchPalette = forwardRef<GlobalSearchPaletteHandle, GlobalS
     const inputRef = useRef<HTMLInputElement>(null);
     const listRef = useRef<HTMLDivElement>(null);
     const [isOpen, setIsOpen] = useState(false);
-    const [activeIndex, setActiveIndex] = useState(0);
+    const [activeIndex, setActiveIndex] = useState(-1);
 
     const flatResults = useMemo(() => flattenSearchGroups(groups), [groups]);
     const showPanel = isOpen && searchQuery.trim().length > 0;
@@ -72,11 +72,11 @@ export const GlobalSearchPalette = forwardRef<GlobalSearchPaletteHandle, GlobalS
     );
 
     useEffect(() => {
-      setActiveIndex(0);
+      setActiveIndex(-1);
     }, [searchQuery, groups]);
 
     useEffect(() => {
-      if (!showPanel || !listRef.current) {
+      if (!showPanel || activeIndex < 0 || !listRef.current) {
         return;
       }
 
@@ -100,28 +100,45 @@ export const GlobalSearchPalette = forwardRef<GlobalSearchPaletteHandle, GlobalS
         return;
       }
 
+      if (event.key === "Enter") {
+        event.preventDefault();
+        if (showPanel && flatResults.length > 0 && activeIndex >= 0) {
+          const selected = flatResults[activeIndex];
+          if (selected) {
+            handleSelect(selected);
+          }
+          return;
+        }
+
+        setOpen(false);
+        return;
+      }
+
       if (!showPanel || flatResults.length === 0) {
         return;
       }
 
       if (event.key === "ArrowDown") {
         event.preventDefault();
-        setActiveIndex((current) => (current + 1 >= flatResults.length ? 0 : current + 1));
+        setActiveIndex((current) => {
+          if (current < 0) {
+            return 0;
+          }
+
+          return current + 1 >= flatResults.length ? 0 : current + 1;
+        });
         return;
       }
 
       if (event.key === "ArrowUp") {
         event.preventDefault();
-        setActiveIndex((current) => (current - 1 < 0 ? flatResults.length - 1 : current - 1));
-        return;
-      }
+        setActiveIndex((current) => {
+          if (current < 0) {
+            return flatResults.length - 1;
+          }
 
-      if (event.key === "Enter") {
-        event.preventDefault();
-        const selected = flatResults[activeIndex];
-        if (selected) {
-          handleSelect(selected);
-        }
+          return current - 1 < 0 ? flatResults.length - 1 : current - 1;
+        });
       }
     };
 
@@ -134,7 +151,8 @@ export const GlobalSearchPalette = forwardRef<GlobalSearchPaletteHandle, GlobalS
     }));
 
     const listboxId = "global-search-results";
-    const activeOptionId = showPanel && flatResults.length > 0 ? `${listboxId}-option-${activeIndex}` : undefined;
+    const activeOptionId =
+      showPanel && flatResults.length > 0 && activeIndex >= 0 ? `${listboxId}-option-${activeIndex}` : undefined;
 
     let resultOffset = 0;
 

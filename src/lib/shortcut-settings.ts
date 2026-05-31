@@ -11,7 +11,8 @@ export type ShortcutActionId =
   | "navigateEvents"
   | "navigateLogs"
   | "navigateCli"
-  | "navigateDocs";
+  | "navigateDocs"
+  | "navigateAssistant";
 
 export type ShortcutSettings = Record<ShortcutActionId, string | null>;
 
@@ -28,8 +29,9 @@ export const SHORTCUT_ACTION_ORDER: ShortcutActionId[] = [
   "navigateNetworks",
   "navigateEvents",
   "navigateLogs",
-  "navigateCli",
   "navigateDocs",
+  "navigateCli",
+  "navigateAssistant",
 ];
 
 export const SHORTCUT_ACTION_LABELS: Record<ShortcutActionId, string> = {
@@ -44,6 +46,7 @@ export const SHORTCUT_ACTION_LABELS: Record<ShortcutActionId, string> = {
   navigateLogs: "Go to Logs",
   navigateCli: "Go to CLI Playground",
   navigateDocs: "Go to Command School",
+  navigateAssistant: "Go to AI Assistant",
 };
 
 const NAVIGATION_ACTION_TO_PAGE: Record<
@@ -57,6 +60,7 @@ const NAVIGATION_ACTION_TO_PAGE: Record<
     | "navigateLogs"
     | "navigateCli"
     | "navigateDocs"
+    | "navigateAssistant"
   >,
   AppPage
 > = {
@@ -68,6 +72,7 @@ const NAVIGATION_ACTION_TO_PAGE: Record<
   navigateLogs: "logs",
   navigateCli: "cli",
   navigateDocs: "docs",
+  navigateAssistant: "assistant",
 };
 
 export const shortcutActionToPage = (actionId: ShortcutActionId): AppPage | null => {
@@ -96,8 +101,9 @@ export const defaultShortcutSettings = (): ShortcutSettings => ({
   navigateNetworks: `${modToken}+4`,
   navigateEvents: `${modToken}+5`,
   navigateLogs: `${modToken}+6`,
-  navigateCli: `${modToken}+7`,
-  navigateDocs: `${modToken}+8`,
+  navigateDocs: `${modToken}+7`,
+  navigateCli: `${modToken}+8`,
+  navigateAssistant: `${modToken}+9`,
 });
 
 const RESERVED_BINDINGS: { pattern: string; reason: string }[] = [
@@ -395,6 +401,13 @@ export const parseShortcutSettings = (raw: string | null): ShortcutSettings => {
         next[actionId] = normalizeBinding(value) ?? defaults[actionId];
       }
     }
+
+    const hasAssistantShortcut = Object.prototype.hasOwnProperty.call(parsed, "navigateAssistant");
+    if (!hasAssistantShortcut && next.navigateDocs === "mod+8" && next.navigateCli === "mod+7") {
+      next.navigateDocs = defaults.navigateDocs;
+      next.navigateCli = defaults.navigateCli;
+    }
+
     return next;
   } catch {
     return defaults;
