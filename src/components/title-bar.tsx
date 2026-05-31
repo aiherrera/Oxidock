@@ -6,6 +6,7 @@ import type { DockerStatus } from "../types/docker";
 import { GlobalSearchPalette, type GlobalSearchPaletteHandle } from "./global-search-palette";
 import { statusBadgeDanger, statusBadgeSuccess } from "../lib/theme-classes";
 import { IconBook, IconRefresh, IconSettings } from "./icons";
+import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
 
 export type TitleBarHandle = {
   focusSearch: () => void;
@@ -121,36 +122,46 @@ export const TitleBar = forwardRef<TitleBarHandle, TitleBarProps>(function Title
         />
 
         <div className="title-bar__actions ml-auto flex shrink-0 items-center gap-1">
-          <button
-            aria-label="Refresh Docker data"
-            className="inline-flex size-8 items-center justify-center rounded-md text-(--text-muted) transition hover:bg-(--surface-hover) hover:text-(--text-primary) disabled:opacity-50"
-            disabled={isLoading}
-            title="Refresh Docker status and visible data"
-            type="button"
-            onClick={onRefresh}
-          >
-            <IconRefresh className={`size-4 ${isLoading ? "animate-spin" : ""}`} />
-          </button>
-          <button
-            aria-label="Open documentation"
-            className="inline-flex size-8 items-center justify-center rounded-md text-(--text-muted) transition hover:bg-(--surface-hover) hover:text-(--text-primary) disabled:opacity-60"
-            disabled={!onOpenHelp}
-            title={onOpenHelp ? "Open Docker command docs and examples" : "Documentation unavailable"}
-            type="button"
-            onClick={onOpenHelp}
-          >
-            <IconBook className="size-4" />
-          </button>
-          <button
-            aria-label="Open settings"
-            className="inline-flex size-8 items-center justify-center rounded-md text-(--text-muted) transition hover:bg-(--surface-hover) hover:text-(--text-primary) disabled:opacity-60"
-            disabled={!onOpenSettings}
-            title={onOpenSettings ? "Open settings (Cmd+,)" : "Settings unavailable"}
-            type="button"
-            onClick={onOpenSettings}
-          >
-            <IconSettings className="size-4" />
-          </button>
+          <Tooltip>
+            <TooltipTrigger
+              aria-label="Refresh Docker data"
+              className="inline-flex size-8 items-center justify-center rounded-md text-(--text-muted) transition hover:bg-(--surface-hover) hover:text-(--text-primary) disabled:opacity-50"
+              disabled={isLoading}
+              type="button"
+              onClick={onRefresh}
+            >
+              <IconRefresh className={`size-4 ${isLoading ? "animate-spin" : ""}`} />
+            </TooltipTrigger>
+            <TooltipContent side="bottom">Refresh Docker status and visible data</TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger
+              aria-label="Open documentation"
+              className="inline-flex size-8 items-center justify-center rounded-md text-(--text-muted) transition hover:bg-(--surface-hover) hover:text-(--text-primary) disabled:opacity-60"
+              disabled={!onOpenHelp}
+              type="button"
+              onClick={onOpenHelp}
+            >
+              <IconBook className="size-4" />
+            </TooltipTrigger>
+            <TooltipContent side="bottom">
+              {onOpenHelp ? "Open Docker command docs and examples" : "Documentation unavailable"}
+            </TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger
+              aria-label="Open settings"
+              className="inline-flex size-8 items-center justify-center rounded-md text-(--text-muted) transition hover:bg-(--surface-hover) hover:text-(--text-primary) disabled:opacity-60"
+              disabled={!onOpenSettings}
+              type="button"
+              onClick={onOpenSettings}
+            >
+              <IconSettings className="size-4" />
+            </TooltipTrigger>
+            <TooltipContent side="bottom">
+              {onOpenSettings ? "Open settings (Cmd+,)" : "Settings unavailable"}
+            </TooltipContent>
+          </Tooltip>
         </div>
       </div>
 

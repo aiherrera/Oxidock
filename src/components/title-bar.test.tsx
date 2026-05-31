@@ -1,8 +1,15 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { TitleBar } from "./title-bar";
+import type React from "react";
 import type { ComponentProps } from "react";
 import type { DockerStatus } from "../types/docker";
+
+vi.mock("./ui/tooltip", () => ({
+  Tooltip: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+  TooltipTrigger: ({ children, ...props }: React.ComponentProps<"button">) => <button {...props}>{children}</button>,
+  TooltipContent: ({ children }: { children: React.ReactNode }) => <div role="tooltip">{children}</div>,
+}));
 
 const dockerStatus: DockerStatus = {
   isRunning: true,
@@ -39,16 +46,13 @@ const renderTitleBar = (overrides: Partial<ComponentProps<typeof TitleBar>> = {}
 afterEach(() => cleanup());
 
 describe("TitleBar actions", () => {
-  it("describes each global title bar action with useful tooltips", () => {
+  it("describes each global title bar action with app tooltips", () => {
     renderTitleBar();
 
-    expect(screen.getByRole("button", { name: "Refresh Docker data" }).getAttribute("title")).toBe(
-      "Refresh Docker status and visible data"
-    );
-    expect(screen.getByRole("button", { name: "Open documentation" }).getAttribute("title")).toBe(
-      "Open Docker command docs and examples"
-    );
-    expect(screen.getByRole("button", { name: "Open settings" }).getAttribute("title")).toBe("Open settings (Cmd+,)");
+    expect(screen.getByRole("button", { name: "Refresh Docker data" })).toBeInTheDocument();
+    expect(screen.getByRole("tooltip", { name: "Refresh Docker status and visible data" })).toBeInTheDocument();
+    expect(screen.getByRole("tooltip", { name: "Open Docker command docs and examples" })).toBeInTheDocument();
+    expect(screen.getByRole("tooltip", { name: "Open settings (Cmd+,)" })).toBeInTheDocument();
   });
 
   it("opens help from the global title bar action", () => {
