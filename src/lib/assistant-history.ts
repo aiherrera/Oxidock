@@ -1,10 +1,18 @@
 import type { AppInsightsResponse, AppInsightsSourceKind } from "./app-insights-assistant";
 import type { DockerCommandRisk } from "./docker-command-registry";
 
+export type AssistantChatAttachment = {
+  id: string;
+  label: string;
+  mediaType?: string;
+};
+
 export type AssistantChatTurn = {
   id: string;
   role: "user" | "assistant";
   content: string;
+  context?: string;
+  attachments?: AssistantChatAttachment[];
   response?: AppInsightsResponse;
 };
 
@@ -12,6 +20,7 @@ export const ASSISTANT_CHAT_HISTORY_KEY = "oxidock.assistant.chat.v1";
 
 const MAX_TURNS = 50;
 const MAX_TEXT_LENGTH = 12_000;
+const MAX_ATTACHMENTS = 10;
 const MAX_SOURCES = 20;
 const MAX_COMMANDS = 8;
 const MAX_STACK_TRACES = 5;
@@ -34,6 +43,34 @@ const truncateText = (value: string): string =>
 
 const optionalString = (value: unknown): string | undefined =>
   typeof value === "string" ? truncateText(value) : undefined;
+
+const sanitizeAttachments = (value: unknown): AssistantChatAttachment[] | undefined => {
+  if (!Array.isArray(value)) {
+    return undefined;
+  }
+
+  const attachments = value
+    .filter(isRecord)
+    .reduce<AssistantChatAttachment[]>((items, attachment, index) => {
+      if (typeof attachment.label !== "string" || !attachment.label.trim()) {
+        return items;
+      }
+
+      items.push({
+        id:
+          typeof attachment.id === "string" && attachment.id.trim()
+            ? truncateText(attachment.id)
+            : `attachment-${index}`,
+        label: truncateText(attachment.label),
+        mediaType: optionalString(attachment.mediaType),
+      });
+
+      return items;
+    }, [])
+    .slice(0, MAX_ATTACHMENTS);
+
+  return attachments.length > 0 ? attachments : undefined;
+};
 
 const sanitizeResponse = (value: unknown): AppInsightsResponse | undefined => {
   if (!isRecord(value) || typeof value.answer !== "string") {
@@ -141,7 +178,15 @@ export const parseAssistantChatHistory = (raw: string | null): AssistantChatTurn
           role,
           content: truncateText(turn.content),
         };
+        const attachments = role === "user" ? sanitizeAttachments(turn.attachments) : undefined;
+        const context = role === "user" ? optionalString(turn.context) : undefined;
 
+        if (context) {
+          parsedTurn.context = context;
+        }
+        if (attachments) {
+          parsedTurn.attachments = attachments;
+        }
         if (response) {
           parsedTurn.response = response;
         }

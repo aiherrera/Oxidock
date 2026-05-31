@@ -2,6 +2,10 @@ import { describe, expect, it } from "vitest";
 import {
   buildDeterministicAnswer,
   buildDeterministicInsights,
+  filterInsightsForQuestion,
+  isOxidockRelevantQuestion,
+  OXIDOCK_ASSISTANT_SCOPE_MESSAGE,
+  resolveAssistantIntent,
   type AppInsightsContextSnapshot,
 } from "./assistant-context";
 
@@ -64,6 +68,44 @@ const baseSnapshot = (): AppInsightsContextSnapshot => ({
   logExcerpts: [],
 });
 
+describe("isOxidockRelevantQuestion", () => {
+  it("rejects general-knowledge questions", () => {
+    expect(isOxidockRelevantQuestion("who is the president of the United States?")).toBe(false);
+    expect(isOxidockRelevantQuestion("What is the capital of France?")).toBe(false);
+  });
+
+  it("accepts docker and oxidock troubleshooting questions", () => {
+    expect(isOxidockRelevantQuestion("Why is postgres restarting?")).toBe(true);
+    expect(isOxidockRelevantQuestion("Which containers use the most memory?")).toBe(true);
+    expect(isOxidockRelevantQuestion("What failed?")).toBe(true);
+  });
+
+  it("accepts vague follow-ups when prior chat exists", () => {
+    expect(isOxidockRelevantQuestion("What about this?", { hasConversationContext: true })).toBe(true);
+  });
+});
+
+describe("resolveAssistantIntent", () => {
+  it("routes events and images to different intents", () => {
+    expect(resolveAssistantIntent("What recent Docker events happened?").intent).toBe("explain_events");
+    expect(resolveAssistantIntent("Which images are still attached to containers?").intent).toBe("explain_images");
+  });
+
+  it("routes architecture questions with pasted text to explain_context", () => {
+    const resolved = resolveAssistantIntent("how is the architecture of oxidock?\n\n## Architecture\n\nTauri stack.");
+    expect(resolved.intent).toBe("explain_context");
+  });
+});
+
+describe("filterInsightsForQuestion", () => {
+  it("returns only event insights for event questions", () => {
+    const insights = buildDeterministicInsights(baseSnapshot());
+    const filtered = filterInsightsForQuestion(insights, "What recent Docker events happened?", baseSnapshot());
+
+    expect(filtered.every((insight) => insight.id === "recent-error-events")).toBe(true);
+  });
+});
+
 describe("buildDeterministicInsights", () => {
   it("flags OOM, restart loops, resource pressure, and dangling images", () => {
     const insights = buildDeterministicInsights(baseSnapshot());
@@ -86,6 +128,18 @@ describe("buildDeterministicInsights", () => {
 });
 
 describe("buildDeterministicAnswer", () => {
+  it("returns the scope message for irrelevant questions", () => {
+    const snapshot = baseSnapshot();
+    const answer = buildDeterministicAnswer(
+      snapshot,
+      buildDeterministicInsights(snapshot),
+      "who is the president of the United States?"
+    );
+
+    expect(answer).toBe(OXIDOCK_ASSISTANT_SCOPE_MESSAGE);
+    expect(answer).not.toContain("OOM-killed");
+  });
+
   it("includes snapshot summary and findings", () => {
     const snapshot = baseSnapshot();
     const insights = buildDeterministicInsights(snapshot);
@@ -96,6 +150,29 @@ describe("buildDeterministicAnswer", () => {
     expect(answer).toContain("Most relevant findings:");
     expect(answer).not.toContain("Snapshot:");
     expect(answer).not.toContain("You asked:");
+  });
+
+  it("scopes failure answers to the container named in the question", () => {
+    const snapshot = baseSnapshot();
+    snapshot.containers.push({
+      id: "full-worker",
+      shortId: "worker1",
+      name: "worker",
+      image: "queue-worker:latest",
+      state: "exited",
+      status: "Exited (137) 3 weeks ago",
+      project: "jobs",
+      service: "worker",
+    });
+
+    const answer = buildDeterministicAnswer(
+      snapshot,
+      buildDeterministicInsights(snapshot),
+      "Why is my postgres container restarting?"
+    );
+
+    expect(answer).toContain("postgres may have been OOM-killed");
+    expect(answer).not.toContain("worker may have been OOM-killed");
   });
 
   it("keeps log excerpts out of the final answer body", () => {

@@ -23,6 +23,12 @@ describe("assistant chat history", () => {
       JSON.stringify([
         { id: "u1", role: "user", content: "Which container is hot?", response: { answer: "ignored" } },
         {
+          id: "u2",
+          role: "user",
+          content: "Summarize this log",
+          attachments: [{ id: "paste-1", label: "Pasted text (500 chars)", mediaType: "text/plain" }],
+        },
+        {
           id: "a1",
           role: "assistant",
           content: "api is using the most memory.",
@@ -46,10 +52,11 @@ describe("assistant chat history", () => {
       ])
     );
 
-    expect(parsed).toHaveLength(2);
+    expect(parsed).toHaveLength(3);
     expect(parsed[0]).toMatchObject({ id: "u1", role: "user", content: "Which container is hot?" });
-    expect(parsed[1]?.response?.sources[0]).toMatchObject({ kind: "container", label: "api" });
-    expect(parsed[1]?.response?.usedModel).toBe(true);
+    expect(parsed[1]?.attachments?.[0]).toMatchObject({ label: "Pasted text (500 chars)" });
+    expect(parsed[2]?.response?.sources[0]).toMatchObject({ kind: "container", label: "api" });
+    expect(parsed[2]?.response?.usedModel).toBe(true);
   });
 
   it("bounds saved history and clears empty history", () => {

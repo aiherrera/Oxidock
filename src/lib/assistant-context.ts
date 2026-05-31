@@ -1,3 +1,4 @@
+import { classifyAssistantIntent, parseAssistantQuestionParts, type AssistantIntent } from "./assistant-intent";
 import {
   dockerCommandList,
   getDockerCommand,
@@ -78,6 +79,7 @@ export type DeterministicInsight = {
 
 export type CollectAppInsightsContextOptions = {
   question: string;
+  intent?: AssistantIntent;
   dockerStatus?: DockerStatus | null;
   signal?: AbortSignal;
 };
@@ -92,20 +94,86 @@ const parsePercent = (value: string | undefined): number | null => {
 
 const truncate = (value: string, max: number) => (value.length <= max ? value : `${value.slice(0, max - 1)}…`);
 
-const isMemoryQuestion = (question: string): boolean => /\b(memory|mem|ram)\b/i.test(question);
-const isImageQuestion = (question: string): boolean =>
-  /\b(image|images|dangling|cleanup|clean up|prune|disk|space|delete|deleting|remove|resources|reclaim|free)\b/i.test(
-    question
-  );
-const isCleanupQuestion = (question: string): boolean =>
-  /\b(cleanup|clean up|prune|delete|deleting|remove|resources|reclaim|free)\b/i.test(question);
-const isEventQuestion = (question: string): boolean =>
-  /\b(event|events|recent|history|happened|timeline)\b/i.test(question);
-const isVolumeQuestion = (question: string): boolean => /\b(volume|volumes)\b/i.test(question);
-const isNetworkQuestion = (question: string): boolean =>
-  /\b(network|networks|port|ports|connect|connection)\b/i.test(question);
-const isFailureQuestion = (question: string): boolean =>
-  /\b(restart|restarting|crash|exited|exit|failed|down|unhealthy|oom|137|killed|log|logs)\b/i.test(question);
+export const resolveAssistantIntent = (question: string, intent?: AssistantIntent, hasConversationContext = false) => {
+  const { currentRequest, pastedContext } = parseAssistantQuestionParts(question);
+  if (intent) {
+    return {
+      ...classifyAssistantIntent({
+        currentRequest,
+        pastedContext,
+        hasConversationContext,
+      }),
+      intent,
+      currentRequest,
+      pastedContext,
+    };
+  }
+
+  const classification = classifyAssistantIntent({
+    currentRequest,
+    pastedContext,
+    hasConversationContext,
+  });
+
+  return {
+    ...classification,
+    currentRequest,
+    pastedContext,
+  };
+};
+
+export const isOxidockRelevantQuestion = (
+  question: string,
+  options?: { hasConversationContext?: boolean }
+): boolean => {
+  const trimmed = question.trim();
+  if (!trimmed) {
+    return false;
+  }
+
+  const { inScope } = resolveAssistantIntent(trimmed, undefined, options?.hasConversationContext ?? false);
+  return inScope;
+};
+
+const GENERIC_CONTAINER_QUERY_TOKENS = new Set([
+  "about",
+  "container",
+  "containers",
+  "crash",
+  "crashed",
+  "debug",
+  "docker",
+  "down",
+  "exited",
+  "failed",
+  "failing",
+  "help",
+  "image",
+  "killed",
+  "logs",
+  "memory",
+  "most",
+  "restart",
+  "restarted",
+  "restarting",
+  "running",
+  "service",
+  "services",
+  "show",
+  "troubleshoot",
+  "what",
+  "which",
+  "wrong",
+]);
+
+export const OXIDOCK_ASSISTANT_SCOPE_MESSAGE =
+  "I can only answer questions about your local Oxidock Docker environment, including containers, images, volumes, networks, events, logs, and related Docker commands. Ask me about your Oxidock resources and I'll use the current local snapshot to help.";
+
+export const OXIDOCK_ASSISTANT_CLARIFY_MESSAGE =
+  "Add a short question or instruction so I know what to do with the context you shared, for example “summarize this”, “find setup steps”, or “compare this with my Docker state”.";
+
+export const OXIDOCK_ASSISTANT_VAGUE_FOLLOWUP_MESSAGE =
+  "I need a bit more detail about what you want from the earlier context. Try “summarize this”, “compare this with my containers”, or ask about a specific container, image, or event.";
 
 const insightRank: Record<InsightSeverity, number> = {
   critical: 0,
@@ -118,37 +186,109 @@ const sortInsightsBySeverity = (insights: DeterministicInsight[]): Deterministic
 
 const formatInsightBullet = (insight: DeterministicInsight): string => `- **${insight.title}**: ${insight.detail}`;
 
-export const filterInsightsForQuestion = (
-  insights: DeterministicInsight[],
-  question: string
-): DeterministicInsight[] => {
-  if (isImageQuestion(question)) {
-    return insights.filter((insight) => insight.id === "dangling-images");
+const getContainerQuestionTokens = (question: string): string[] =>
+  question
+    .toLowerCase()
+    .split(/[^a-z0-9_.:-]+/)
+    .map((token) => token.trim())
+    .filter((token) => token.length > 2 && !GENERIC_CONTAINER_QUERY_TOKENS.has(token));
+
+const findExplicitContainersForQuestion = (
+  question: string,
+  containers: AppInsightsContainerSnapshot[]
+): AppInsightsContainerSnapshot[] => {
+  const tokens = getContainerQuestionTokens(question);
+  if (tokens.length === 0) {
+    return [];
   }
 
-  if (isEventQuestion(question)) {
-    return insights.filter((insight) => insight.id === "recent-error-events");
-  }
+  return containers.filter((container) => {
+    const haystack = [container.name, container.image, container.project ?? "", container.service ?? ""]
+      .join(" ")
+      .toLowerCase();
 
-  if (isFailureQuestion(question)) {
-    return insights.filter(
-      (insight) =>
-        insight.id.startsWith("oom-") ||
-        insight.id.startsWith("restart-") ||
-        insight.id.startsWith("exited-") ||
-        insight.id === "recent-error-events"
-    );
-  }
-
-  return insights;
+    return tokens.some((token) => haystack.includes(token));
+  });
 };
 
-const buildImageAnswer = (snapshot: AppInsightsContextSnapshot, question: string): string => {
+const scopeInsightsToExplicitContainers = (
+  insights: DeterministicInsight[],
+  question: string,
+  snapshot?: AppInsightsContextSnapshot
+): DeterministicInsight[] => {
+  if (!snapshot) {
+    return insights;
+  }
+
+  const sourceIds = new Set(
+    findExplicitContainersForQuestion(question, snapshot.containers).map(
+      (container) => `container:${container.shortId}`
+    )
+  );
+
+  if (sourceIds.size === 0) {
+    return insights;
+  }
+
+  const scopedInsights = insights.filter((insight) => insight.sourceIds.some((sourceId) => sourceIds.has(sourceId)));
+  return scopedInsights.length > 0 ? scopedInsights : insights;
+};
+
+export const filterInsightsForQuestion = (
+  insights: DeterministicInsight[],
+  question: string,
+  snapshot?: AppInsightsContextSnapshot,
+  intent?: AssistantIntent
+): DeterministicInsight[] => {
+  const resolvedIntent = intent ?? resolveAssistantIntent(question).intent;
+
+  switch (resolvedIntent) {
+    case "explain_images":
+    case "list_cleanup_candidates":
+      return insights.filter((insight) => insight.id === "dangling-images");
+
+    case "explain_events":
+      return insights.filter((insight) => insight.id === "recent-error-events");
+
+    case "explain_volumes":
+    case "explain_networks":
+    case "summarize_context":
+    case "explain_context":
+    case "compare_context_to_state":
+      return [];
+
+    case "explain_memory":
+      return scopeInsightsToExplicitContainers(
+        insights.filter((insight) => insight.id.startsWith("oom-") || insight.id.startsWith("mem-")),
+        question,
+        snapshot
+      );
+
+    case "diagnose_container":
+    case "suggest_next_step":
+      return scopeInsightsToExplicitContainers(
+        insights.filter(
+          (insight) =>
+            insight.id.startsWith("oom-") ||
+            insight.id.startsWith("restart-") ||
+            insight.id.startsWith("exited-") ||
+            insight.id === "recent-error-events"
+        ),
+        question,
+        snapshot
+      );
+
+    default:
+      return insights;
+  }
+};
+
+const buildImageAnswer = (snapshot: AppInsightsContextSnapshot, intent: AssistantIntent): string => {
   const danglingImages = snapshot.images.filter((image) => image.repository === "<none>" || image.tag === "<none>");
   const attachedImages = snapshot.images.filter((image) => image.containers > 0);
   const unattachedImages = snapshot.images.filter((image) => image.containers === 0);
 
-  if (isCleanupQuestion(question)) {
+  if (intent === "list_cleanup_candidates") {
     return buildCleanupAnswer(snapshot);
   }
 
@@ -167,6 +307,219 @@ const buildImageAnswer = (snapshot: AppInsightsContextSnapshot, question: string
         (image) =>
           `- **${image.repository}:${image.tag}**: used by ${image.containers} container(s), size ${image.size}`
       ),
+  ].join("\n");
+};
+
+const MAX_CONTEXT_ANSWER_CHARS = 4_000;
+const MAX_SECTION_BODY_CHARS = 2_800;
+
+const CONTEXT_QUERY_STOP_WORDS = new Set([
+  "about",
+  "does",
+  "from",
+  "have",
+  "how",
+  "oxidock",
+  "that",
+  "the",
+  "this",
+  "what",
+  "when",
+  "where",
+  "which",
+  "with",
+  "your",
+]);
+
+type MarkdownSection = {
+  title: string;
+  level: number;
+  body: string;
+};
+
+const getContextQueryTokens = (question: string): string[] =>
+  question
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .map((token) => token.trim())
+    .filter((token) => token.length > 2 && !CONTEXT_QUERY_STOP_WORDS.has(token));
+
+const parseMarkdownSections = (text: string): MarkdownSection[] => {
+  const lines = text.trim().split("\n");
+  const sections: MarkdownSection[] = [];
+  let preamble: string[] = [];
+  let current: MarkdownSection | null = null;
+
+  const flushCurrent = () => {
+    if (current) {
+      sections.push(current);
+      current = null;
+    }
+  };
+
+  for (const line of lines) {
+    const headerMatch = line.match(/^(#{1,3})\s+(.+)$/);
+    if (headerMatch) {
+      flushCurrent();
+      if (sections.length === 0 && preamble.length > 0) {
+        sections.push({
+          level: 0,
+          title: "Introduction",
+          body: preamble.join("\n").trim(),
+        });
+        preamble = [];
+      }
+      current = {
+        level: headerMatch[1].length,
+        title: headerMatch[2].trim(),
+        body: "",
+      };
+      continue;
+    }
+
+    if (current) {
+      current.body = current.body ? `${current.body}\n${line}` : line;
+    } else {
+      preamble.push(line);
+    }
+  }
+
+  flushCurrent();
+
+  if (sections.length === 0) {
+    return [{ level: 0, title: "Document", body: text.trim() }];
+  }
+
+  if (preamble.length > 0 && sections[0]?.level !== 0) {
+    sections.unshift({
+      level: 0,
+      title: "Introduction",
+      body: preamble.join("\n").trim(),
+    });
+  }
+
+  return sections;
+};
+
+const scoreContextSection = (section: MarkdownSection, tokens: string[]): number => {
+  const haystack = `${section.title} ${section.body}`.toLowerCase();
+  let score = tokens.reduce((total, token) => (haystack.includes(token) ? total + 1 : total), 0);
+
+  if (
+    tokens.includes("architecture") &&
+    /\b(architecture|stack|tauri|bollard|flowchart|backend|frontend)\b/i.test(haystack)
+  ) {
+    score += 4;
+  }
+  if (tokens.includes("feature") && /\b(feature|capabilities)\b/i.test(haystack)) {
+    score += 3;
+  }
+  if (tokens.includes("setup") && /\b(requirement|install|development|dev)\b/i.test(haystack)) {
+    score += 3;
+  }
+
+  if (section.title && tokens.some((token) => section.title.toLowerCase().includes(token))) {
+    score += 2;
+  }
+
+  return score;
+};
+
+const truncateSectionBody = (body: string, max = MAX_SECTION_BODY_CHARS): string => {
+  const trimmed = body.trim();
+  if (trimmed.length <= max) {
+    return trimmed;
+  }
+
+  const cut = trimmed.slice(0, max);
+  const lastParagraph = cut.lastIndexOf("\n\n");
+  if (lastParagraph > max * 0.5) {
+    return `${cut.slice(0, lastParagraph).trim()}\n\n…`;
+  }
+
+  return `${cut.trim()}…`;
+};
+
+const buildContextQuestionAnswer = (currentRequest: string, pastedContext: string): string => {
+  const tokens = getContextQueryTokens(currentRequest);
+  const sections = parseMarkdownSections(pastedContext);
+  const scored = sections
+    .map((section) => ({ section, score: scoreContextSection(section, tokens) }))
+    .filter((entry) => entry.score > 0)
+    .sort((a, b) => b.score - a.score);
+
+  const selected =
+    scored.length > 0 ? scored.slice(0, 3) : sections.slice(0, 2).map((section) => ({ section, score: 1 }));
+
+  const topic = currentRequest.replace(/\?+\s*$/, "").trim();
+  const parts = selected.map(({ section }) => {
+    const body = truncateSectionBody(section.body);
+    if (section.level > 0 && section.title) {
+      return `### ${section.title}\n\n${body}`;
+    }
+    return body;
+  });
+
+  let answer = [`From the pasted context, here is the relevant material for **${topic}**:`, "", ...parts].join("\n\n");
+
+  if (answer.length > MAX_CONTEXT_ANSWER_CHARS) {
+    answer = `${answer.slice(0, MAX_CONTEXT_ANSWER_CHARS - 1).trim()}…`;
+  }
+
+  return answer;
+};
+
+const buildContextSummaryAnswer = (pastedContext: string | undefined): string => {
+  if (!pastedContext?.trim()) {
+    return OXIDOCK_ASSISTANT_VAGUE_FOLLOWUP_MESSAGE;
+  }
+
+  const sections = parseMarkdownSections(pastedContext);
+  const titleSection = sections.find((section) => section.level === 1) ?? sections[0];
+  const title = titleSection?.title ?? "the pasted document";
+  const introduction =
+    sections.find((section) => section.level === 0)?.body.trim() ??
+    sections.find((section) => section.level <= 1 && section.body.trim())?.body.trim() ??
+    "";
+  const outline = sections.filter((section) => section.level >= 2).map((section) => `- **${section.title}**`);
+
+  const introExcerpt = introduction ? truncateSectionBody(introduction, 900) : "";
+
+  return [
+    `Here is a concise summary of **${title}** from the pasted context:`,
+    "",
+    introExcerpt || "No introduction paragraph was found in the pasted text.",
+    outline.length > 0 ? ["", "Main sections:", ...outline].join("\n") : "",
+    "",
+    "Ask a follow-up if you want details on architecture, setup, or a comparison with your local Docker state.",
+  ]
+    .filter(Boolean)
+    .join("\n");
+};
+
+const buildContextCompareAnswer = (snapshot: AppInsightsContextSnapshot, pastedContext: string | undefined): string => {
+  if (!pastedContext?.trim()) {
+    return OXIDOCK_ASSISTANT_VAGUE_FOLLOWUP_MESSAGE;
+  }
+
+  const running = snapshot.containers.filter((container) => container.state.toLowerCase() === "running");
+  const referencedImages = snapshot.images.filter((image) =>
+    pastedContext.toLowerCase().includes(image.repository.toLowerCase())
+  );
+
+  return [
+    "Here is a quick comparison between your pasted context and the current local Docker snapshot:",
+    "",
+    `- **Running containers**: ${running.length} of ${snapshot.containers.length}`,
+    `- **Images in snapshot**: ${snapshot.images.length}`,
+    referencedImages.length > 0
+      ? `- **Images mentioned in pasted context that match locally**: ${referencedImages
+          .slice(0, 5)
+          .map((image) => `${image.repository}:${image.tag}`)
+          .join(", ")}`
+      : "- **Images mentioned in pasted context**: none matched exactly in the current snapshot",
+    "",
+    "Review service names, image tags, and ports in the pasted context against the containers and networks shown in Oxidock.",
   ].join("\n");
 };
 
@@ -240,8 +593,14 @@ const buildNetworkAnswer = (snapshot: AppInsightsContextSnapshot): string => {
   ].join("\n");
 };
 
-const buildMemoryAnswer = (snapshot: AppInsightsContextSnapshot, insights: DeterministicInsight[]): string => {
-  const memoryRankings = snapshot.containers
+const buildMemoryAnswer = (
+  snapshot: AppInsightsContextSnapshot,
+  insights: DeterministicInsight[],
+  question: string
+): string => {
+  const explicitContainers = findExplicitContainersForQuestion(question, snapshot.containers);
+  const memoryContainers = explicitContainers.length > 0 ? explicitContainers : snapshot.containers;
+  const memoryRankings = memoryContainers
     .map((container) => ({
       container,
       memoryPercent: parsePercent(container.memoryPercent),
@@ -256,9 +615,11 @@ const buildMemoryAnswer = (snapshot: AppInsightsContextSnapshot, insights: Deter
   if (memoryRankings.length > 0) {
     const [top] = memoryRankings;
     const lines = [
-      `**${top.container.name}** is using the most memory right now at **${top.container.memoryPercent}** of its configured limit.`,
+      explicitContainers.length > 0
+        ? `**${top.container.name}** is using **${top.container.memoryPercent}** of its configured memory limit.`
+        : `**${top.container.name}** is using the most memory right now at **${top.container.memoryPercent}** of its configured limit.`,
       "",
-      "Top memory users:",
+      explicitContainers.length > 0 ? "Matching memory usage:" : "Top memory users:",
       ...memoryRankings
         .slice(0, 5)
         .map(({ container }) => `- **${container.name}**: ${container.memoryPercent} (${container.status})`),
@@ -279,7 +640,9 @@ const buildMemoryAnswer = (snapshot: AppInsightsContextSnapshot, insights: Deter
 
   if (oomInsights.length > 0) {
     return [
-      "I could not rank current memory usage because the snapshot does not include live memory stats, but I did find containers with OOM/137 history.",
+      explicitContainers.length > 0
+        ? "I could not rank current memory usage for the matching container because the snapshot does not include live memory stats, but I did find OOM/137 history."
+        : "I could not rank current memory usage because the snapshot does not include live memory stats, but I did find containers with OOM/137 history.",
       "",
       ...oomInsights.slice(0, 5).map(formatInsightBullet),
     ].join("\n");
@@ -336,12 +699,30 @@ const findContainersForQuestion = (
 
 export const collectAppInsightsContext = async ({
   question,
+  intent: explicitIntent,
   dockerStatus: initialStatus,
   signal,
 }: CollectAppInsightsContextOptions): Promise<AppInsightsContextSnapshot> => {
   if (signal?.aborted) {
     throw new DOMException("Context collection aborted", "AbortError");
   }
+
+  const resolved = resolveAssistantIntent(question, explicitIntent);
+  const intent = resolved.intent;
+  const currentRequest = resolved.currentRequest || question;
+  const needsContainerStats =
+    intent === "diagnose_container" ||
+    intent === "explain_memory" ||
+    intent === "compare_context_to_state" ||
+    intent === "suggest_next_step";
+  const needsLogs =
+    intent === "diagnose_container" || intent === "suggest_next_step" || /\b(log|logs)\b/i.test(currentRequest);
+  const needsImages =
+    intent === "explain_images" || intent === "list_cleanup_candidates" || intent === "compare_context_to_state";
+  const needsContextOnly = intent === "summarize_context" || intent === "explain_context";
+  const needsVolumes = intent === "explain_volumes" || intent === "list_cleanup_candidates";
+  const needsNetworks = intent === "explain_networks" || intent === "compare_context_to_state";
+  const needsEvents = intent === "explain_events" || intent === "diagnose_container" || intent === "suggest_next_step";
 
   const status = initialStatus ?? (await fetchDockerStatus());
   const emptySnapshot: AppInsightsContextSnapshot = {
@@ -371,7 +752,7 @@ export const collectAppInsightsContext = async ({
   };
 
   if (!status.isRunning) {
-    emptySnapshot.matchedDocs = matchDocsForQuestion(question).map((doc) => ({
+    emptySnapshot.matchedDocs = matchDocsForQuestion(currentRequest).map((doc) => ({
       id: doc.id,
       label: doc.label,
       example: doc.example,
@@ -381,11 +762,11 @@ export const collectAppInsightsContext = async ({
   }
 
   const [containers, images, volumes, networks, events] = await Promise.all([
-    fetchContainers(true),
-    fetchImages(),
-    fetchVolumes(),
-    fetchNetworks(),
-    fetchDockerEvents(),
+    needsContextOnly ? Promise.resolve([]) : fetchContainers(true),
+    needsImages ? fetchImages() : Promise.resolve([]),
+    needsVolumes ? fetchVolumes() : Promise.resolve([]),
+    needsNetworks ? fetchNetworks() : Promise.resolve([]),
+    needsEvents ? fetchDockerEvents() : Promise.resolve([]),
   ]);
 
   if (signal?.aborted) {
@@ -396,7 +777,7 @@ export const collectAppInsightsContext = async ({
   const runningIds = limitedContainers
     .filter((container) => container.state.toLowerCase() === "running")
     .map((container) => container.id)
-    .slice(0, STATS_CONTAINER_LIMIT);
+    .slice(0, needsContainerStats ? STATS_CONTAINER_LIMIT : 0);
 
   const stats = runningIds.length > 0 ? await fetchContainerStats(runningIds).catch(() => []) : [];
   const statsById = new Map(stats.map((entry) => [entry.id, entry]));
@@ -417,7 +798,7 @@ export const collectAppInsightsContext = async ({
     };
   });
 
-  const logTargets = findContainersForQuestion(question, containerSnapshots);
+  const logTargets = needsLogs ? findContainersForQuestion(currentRequest, containerSnapshots) : [];
   const logExcerpts: AppInsightsContextSnapshot["logExcerpts"] = [];
 
   for (const target of logTargets) {
@@ -475,7 +856,7 @@ export const collectAppInsightsContext = async ({
       actorName: event.actorName,
       typ: event.typ,
     })),
-    matchedDocs: matchDocsForQuestion(question).map((doc) => ({
+    matchedDocs: matchDocsForQuestion(currentRequest).map((doc) => ({
       id: doc.id,
       label: doc.label,
       example: doc.example,
@@ -590,9 +971,32 @@ export const buildDeterministicInsights = (snapshot: AppInsightsContextSnapshot)
 export const buildDeterministicAnswer = (
   snapshot: AppInsightsContextSnapshot,
   insights: DeterministicInsight[],
-  question: string
+  question: string,
+  options?: { intent?: AssistantIntent; pastedContext?: string; hasConversationContext?: boolean }
 ): string => {
-  const trimmedQuestion = question.trim();
+  const resolved = resolveAssistantIntent(question, options?.intent, options?.hasConversationContext ?? false);
+  const { intent, pastedContext } = resolved;
+  const effectivePastedContext = options?.pastedContext ?? pastedContext;
+
+  if (intent === "out_of_scope") {
+    return OXIDOCK_ASSISTANT_SCOPE_MESSAGE;
+  }
+
+  if (intent === "clarify") {
+    return effectivePastedContext?.trim()
+      ? OXIDOCK_ASSISTANT_CLARIFY_MESSAGE
+      : OXIDOCK_ASSISTANT_VAGUE_FOLLOWUP_MESSAGE;
+  }
+
+  if (intent === "explain_context") {
+    return effectivePastedContext?.trim()
+      ? buildContextQuestionAnswer(resolved.currentRequest || question, effectivePastedContext)
+      : OXIDOCK_ASSISTANT_VAGUE_FOLLOWUP_MESSAGE;
+  }
+
+  if (intent === "summarize_context") {
+    return buildContextSummaryAnswer(effectivePastedContext);
+  }
 
   if (!snapshot.docker.isRunning) {
     const lines: string[] = [];
@@ -603,27 +1007,25 @@ export const buildDeterministicAnswer = (
     return lines.join("\n");
   }
 
-  if (isMemoryQuestion(trimmedQuestion)) {
-    return buildMemoryAnswer(snapshot, insights);
+  switch (intent) {
+    case "compare_context_to_state":
+      return buildContextCompareAnswer(snapshot, effectivePastedContext);
+    case "explain_memory":
+      return buildMemoryAnswer(snapshot, insights, question);
+    case "explain_images":
+    case "list_cleanup_candidates":
+      return buildImageAnswer(snapshot, intent);
+    case "explain_events":
+      return buildEventAnswer(snapshot);
+    case "explain_volumes":
+      return buildVolumeAnswer(snapshot);
+    case "explain_networks":
+      return buildNetworkAnswer(snapshot);
+    default:
+      break;
   }
 
-  if (isImageQuestion(trimmedQuestion)) {
-    return buildImageAnswer(snapshot, trimmedQuestion);
-  }
-
-  if (isEventQuestion(trimmedQuestion)) {
-    return buildEventAnswer(snapshot);
-  }
-
-  if (isVolumeQuestion(trimmedQuestion)) {
-    return buildVolumeAnswer(snapshot);
-  }
-
-  if (isNetworkQuestion(trimmedQuestion)) {
-    return buildNetworkAnswer(snapshot);
-  }
-
-  const relevantInsights = filterInsightsForQuestion(insights, trimmedQuestion);
+  const relevantInsights = filterInsightsForQuestion(insights, question, snapshot, intent);
 
   if (relevantInsights.length === 0) {
     return `I do not see an obvious issue in the current snapshot: ${snapshot.counts.running} of ${snapshot.counts.containers} containers are running, and Docker is reachable.`;

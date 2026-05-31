@@ -662,6 +662,11 @@ pub struct AppInsightsDeterministicPayload {
 #[serde(rename_all = "camelCase")]
 pub struct AskAppInsightsParams {
     pub question: String,
+    pub current_request: String,
+    pub pasted_context: Option<String>,
+    pub intent: String,
+    pub intent_label: String,
+    pub conversation_context: Option<String>,
     pub context_json: String,
     #[serde(flatten)]
     pub deterministic: AppInsightsDeterministicPayload,
@@ -740,6 +745,11 @@ pub async fn ask_app_insights_assistant(
 ) -> Result<AppInsightsResponse, String> {
     let AskAppInsightsParams {
         question,
+        current_request,
+        pasted_context,
+        intent,
+        intent_label,
+        conversation_context,
         context_json,
         deterministic:
             AppInsightsDeterministicPayload {
@@ -770,12 +780,36 @@ pub async fn ask_app_insights_assistant(
     } else {
         context_json
     };
+    let conversation_context_for_prompt = conversation_context
+        .unwrap_or_default()
+        .trim()
+        .chars()
+        .take(8_000)
+        .collect::<String>();
+    let pasted_context_for_prompt = pasted_context
+        .unwrap_or_default()
+        .trim()
+        .chars()
+        .take(8_000)
+        .collect::<String>();
 
     let prompt = format!(
         r#"
-You are Oxidock, a local Docker desktop assistant. Answer using ONLY the JSON context below.
+You are Oxidock, a local Docker desktop assistant. Answer using ONLY the JSON context below, the pasted context, and prior chat when it helps interpret the current request.
 
-User question:
+Current user request:
+{current_request}
+
+Detected intent:
+{intent_label} ({intent})
+
+Pasted context:
+{pasted_context_for_prompt}
+
+Prior chat context:
+{conversation_context_for_prompt}
+
+Combined question (for reference only):
 {question}
 
 Docker context JSON:
@@ -798,6 +832,9 @@ Return ONLY valid JSON (no markdown fences) with this shape:
 }}
 
 Rules:
+- Answer the current user request first. Do not answer a different question from prior chat alone.
+- If the current request is unrelated to prior chat, ignore prior chat except for disambiguation.
+- Use pasted context only when the current request asks you to summarize, compare, or apply it.
 - The answer must directly answer the user's question first, in 1-2 concise paragraphs or a short ranked list.
 - Do not use the answer field to restate the raw snapshot, dump logs, or list every finding.
 - Put investigation details in reasoning, sources, suggestedCommands, or stackTraces instead of the final answer.
