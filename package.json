@@ -90,7 +90,7 @@
     "prettier": "^3.8.3",
     "react-doctor": "^0.2.8",
     "tailwindcss": "^4.3.0",
-    "typescript": "~5.8.3",
+    "typescript": "~6.0.3",
     "typescript-eslint": "^8.60.0",
     "vite": "^8.0.14",
     "vitest": "^4.1.7"
