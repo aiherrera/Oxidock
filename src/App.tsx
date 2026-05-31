@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import "./App.css";
 import { AppRouter } from "./components/app-router";
 import { AppShell } from "./components/app-shell";
+import { LocalAiInstallWidget } from "./components/local-ai-install-widget";
 import { Sidebar } from "./components/sidebar";
 import type { CliHistoryEntry } from "./components/cli-playground-page";
 import type { TitleBarHandle } from "./components/title-bar";
@@ -200,6 +201,7 @@ function App() {
       onSearchResultSelect={(result) => void handleSearchResultSelect(result)}
     >
       {pageContent}
+      <LocalAiInstallWidget onOpenAssistant={() => setActivePage("assistant")} />
     </AppShell>
   );
 }
