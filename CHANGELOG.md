@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.5.0](https://github.com/aiherrera/Oxidock/compare/v0.4.0...v0.5.0) (2026-05-31)
+
+
+### Features
+
+* **assistant:** Improve command suggestion intent handling ([ba630e1](https://github.com/aiherrera/Oxidock/commit/ba630e15fbd6c86bb2beb8386cfe4bda0f29bc89))
+* **tauri:** Upgrade local AI model to Qwen 3B ([ec3dc8b](https://github.com/aiherrera/Oxidock/commit/ec3dc8bb2a7ccb2092fda2653f0b243a8dbf2baf))
+* **ui:** Add local AI install progress widget ([d53d76d](https://github.com/aiherrera/Oxidock/commit/d53d76df04a3f0af3c51e267dc6641f5292ae4b3))
+* **ui:** Add tooltips to title bar actions ([6b4def4](https://github.com/aiherrera/Oxidock/commit/6b4def4b22e0bbe590b6c331a59d3e1947b25d97))
+
 ## [0.4.0](https://github.com/aiherrera/Oxidock/compare/v0.3.0...v0.4.0) (2026-05-31)
 
 
