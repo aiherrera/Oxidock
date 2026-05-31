@@ -50,7 +50,7 @@ const convertBlobUrlToDataUrl = async (url: string): Promise<string | null> => {
     const blob = await response.blob();
     // FileReader uses callback-based API, wrapping in Promise is necessary
     // oxlint-disable-next-line eslint-plugin-promise(avoid-new)
-    return new Promise((resolve) => {
+    return await new Promise((resolve) => {
       const reader = new FileReader();
       // oxlint-disable-next-line eslint-plugin-unicorn(prefer-add-event-listener)
       reader.onloadend = () => resolve(reader.result as string);
@@ -846,13 +846,18 @@ export const PromptInputBody = ({ className, ...props }: PromptInputBodyProps) =
   />
 );
 
-export type PromptInputTextareaProps = ComponentProps<typeof InputGroupTextarea>;
+export type PromptInputTextareaProps = ComponentProps<typeof InputGroupTextarea> & {
+  /** When set, pastes of plain text at or above this length become file attachments instead of textarea content. */
+  longPasteCharThreshold?: number;
+};
 
 export const PromptInputTextarea = ({
   onChange,
   onKeyDown,
+  onPaste,
   className,
   placeholder = "What would you like to know?",
+  longPasteCharThreshold,
   ...props
 }: PromptInputTextareaProps) => {
   const controller = useOptionalPromptInputController();
@@ -902,6 +907,11 @@ export const PromptInputTextarea = ({
 
   const handlePaste: ClipboardEventHandler<HTMLTextAreaElement> = useCallback(
     (event) => {
+      onPaste?.(event);
+      if (event.defaultPrevented) {
+        return;
+      }
+
       const items = event.clipboardData?.items;
 
       if (!items) {
@@ -922,9 +932,19 @@ export const PromptInputTextarea = ({
       if (files.length > 0) {
         event.preventDefault();
         attachments.add(files);
+        return;
+      }
+
+      if (longPasteCharThreshold != null) {
+        const pastedText = event.clipboardData?.getData("text/plain") ?? "";
+        if (pastedText.length >= longPasteCharThreshold) {
+          event.preventDefault();
+          const label = `Pasted text (${pastedText.length.toLocaleString()} chars)`;
+          attachments.add([new File([pastedText], `${label}.txt`, { type: "text/plain" })]);
+        }
       }
     },
-    [attachments]
+    [attachments, longPasteCharThreshold, onPaste]
   );
 
   const handleCompositionEnd = useCallback(() => setIsComposing(false), []);
