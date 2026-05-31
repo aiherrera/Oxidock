@@ -133,7 +133,7 @@ cd src-tauri && cargo audit   # requires: cargo install cargo-audit
 
 ## Local AI assistant
 
-The optional on-device assistant downloads a small GGUF model from Hugging Face on first use. The `llama-cli` sidecar must be bundled for release builds (not included in this repository). Model integrity is checked via `EXPECTED_MODEL_SHA256` in `src-tauri/src/ai.rs`.
+The optional on-device assistant downloads a Qwen2.5-Coder-3B-Instruct GGUF (~1.9 GB) from Hugging Face on first use. The `llama-cli` sidecar must be bundled for release builds (not included in this repository). Model integrity is checked via `EXPECTED_MODEL_SHA256` in `src-tauri/src/ai.rs`.
 
 ## Project layout
 

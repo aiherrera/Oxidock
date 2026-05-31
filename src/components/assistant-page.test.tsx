@@ -26,14 +26,14 @@ vi.mock("../lib/local-ai-assistant", () => ({
   defaultLocalAiAssistantStatus: {
     state: "notInstalled",
     modelName: "oxidock-assist",
-    modelSizeLabel: "~380 MB",
+    modelSizeLabel: "~1.9 GB",
     message: null,
     progress: null,
   },
   getLocalAiAssistantStatus: vi.fn().mockResolvedValue({
     state: "notInstalled",
     modelName: "oxidock-assist",
-    modelSizeLabel: "~380 MB",
+    modelSizeLabel: "~1.9 GB",
     message: null,
     progress: null,
   }),
@@ -41,7 +41,7 @@ vi.mock("../lib/local-ai-assistant", () => ({
   installLocalAiAssistant: vi.fn().mockResolvedValue({
     state: "installed",
     modelName: "oxidock-assist",
-    modelSizeLabel: "~380 MB",
+    modelSizeLabel: "~1.9 GB",
     message: "Local assistant model is installed.",
     progress: null,
   }),

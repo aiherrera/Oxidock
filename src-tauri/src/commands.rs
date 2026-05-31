@@ -5,8 +5,8 @@ use crate::ai::{
     get_ai_assistant_status as get_ai_assistant_status_impl,
     install_ai_assistant as install_ai_assistant_impl,
     remove_ai_assistant as remove_ai_assistant_impl,
-    suggest_docker_commands as suggest_docker_commands_impl, AiAssistantStatus,
-    AppInsightsResponse, AskAppInsightsParams, SuggestDockerCommandsResponse,
+    suggest_docker_commands as suggest_docker_commands_impl, AiAssistantInstallRuntime,
+    AiAssistantStatus, AppInsightsResponse, AskAppInsightsParams, SuggestDockerCommandsResponse,
 };
 use crate::app_metrics::{
     get_app_resource_usage as get_app_resource_usage_impl, AppMetricsState, AppResourceUsage,
@@ -292,18 +292,27 @@ pub async fn run_engine_lifecycle_action(
 }
 
 #[tauri::command]
-pub async fn get_ai_assistant_status(app: AppHandle) -> Result<AiAssistantStatus, String> {
-    get_ai_assistant_status_impl(app)
+pub async fn get_ai_assistant_status(
+    app: AppHandle,
+    install_runtime: State<'_, std::sync::Arc<AiAssistantInstallRuntime>>,
+) -> Result<AiAssistantStatus, String> {
+    get_ai_assistant_status_impl(app, install_runtime.inner().as_ref())
 }
 
 #[tauri::command]
-pub async fn install_ai_assistant(app: AppHandle) -> Result<AiAssistantStatus, String> {
-    install_ai_assistant_impl(app).await
+pub async fn install_ai_assistant(
+    app: AppHandle,
+    install_runtime: State<'_, std::sync::Arc<AiAssistantInstallRuntime>>,
+) -> Result<AiAssistantStatus, String> {
+    install_ai_assistant_impl(app, install_runtime.inner().clone()).await
 }
 
 #[tauri::command]
-pub async fn remove_ai_assistant(app: AppHandle) -> Result<AiAssistantStatus, String> {
-    remove_ai_assistant_impl(app).await
+pub async fn remove_ai_assistant(
+    app: AppHandle,
+    install_runtime: State<'_, std::sync::Arc<AiAssistantInstallRuntime>>,
+) -> Result<AiAssistantStatus, String> {
+    remove_ai_assistant_impl(app, install_runtime.inner().as_ref()).await
 }
 
 #[tauri::command]

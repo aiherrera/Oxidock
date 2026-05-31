@@ -8,6 +8,7 @@ mod engine;
 mod menu;
 mod registry;
 
+use ai::AiAssistantInstallRuntime;
 use app_metrics::AppMetricsState;
 use commands::{
     ask_app_insights_assistant, classify_docker_command, delete_registry_credentials,
@@ -30,6 +31,7 @@ use tauri::Manager;
 pub fn run() {
     tauri::Builder::default()
         .manage(AppMetricsState::default())
+        .manage(Arc::new(AiAssistantInstallRuntime::default()))
         .manage(DockerState::default())
         .manage(EngineManager::default())
         .manage(Arc::new(DockerWatchState::default()))

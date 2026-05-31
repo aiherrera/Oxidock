@@ -3,6 +3,7 @@ use sha2::{Digest, Sha256};
 use std::fs;
 use std::path::PathBuf;
 use std::process::Stdio;
+use std::sync::Mutex;
 use std::time::Duration;
 use std::time::Instant;
 use tauri::{AppHandle, Emitter, Manager};
@@ -88,15 +89,15 @@ struct AiModelManifest {
     expected_sha256: Option<&'static str>,
 }
 
-/// Small instruct/coder GGUF for local desktop inference (swap by updating this manifest).
+/// Instruct/coder GGUF for local desktop inference (swap by updating this manifest).
 const ASSISTANT_MODEL: AiModelManifest = AiModelManifest {
     display_name: "oxidock-assist",
-    size_label: "~380 MB",
+    size_label: "~1.9 GB",
     file_name: "assistant.gguf",
     // Pin to a specific commit so resolve/main re-uploads do not break checksum verification.
-    download_url: "https://huggingface.co/bartowski/Qwen2.5-Coder-0.5B-Instruct-GGUF/resolve/69a2c192eed24297fb09a34d8ba948b8624cc3e2/Qwen2.5-Coder-0.5B-Instruct-Q4_K_M.gguf",
-    // LFS SHA256 for Qwen2.5-Coder-0.5B-Instruct-Q4_K_M.gguf at commit 69a2c19.
-    expected_sha256: Some("0128e77564e43d40682f82d7ebe8a9abdf0c24c8f55fa85629f8cc156b1b6560"),
+    download_url: "https://huggingface.co/bartowski/Qwen2.5-Coder-3B-Instruct-GGUF/resolve/7c137640ef0332dfedb229f2504c58d83ed4307a/Qwen2.5-Coder-3B-Instruct-Q4_K_M.gguf",
+    // LFS SHA256 for Qwen2.5-Coder-3B-Instruct-Q4_K_M.gguf at commit 7c13764.
+    expected_sha256: Some("3da3afe6cf5c674ac195803ea0dd6fee7e1c228c2105c1ce8c66890d1d4ab460"),
 };
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -132,7 +133,53 @@ fn read_model_metadata(paths: &AiModelPaths) -> Option<AiModelMetadata> {
     serde_json::from_str::<AiModelMetadata>(&raw).ok()
 }
 
-pub fn get_ai_assistant_status(app: AppHandle) -> Result<AiAssistantStatus, String> {
+#[derive(Default)]
+struct AiInstallRuntimeState {
+    active: bool,
+    status: Option<AiAssistantStatus>,
+}
+
+#[derive(Default)]
+pub struct AiAssistantInstallRuntime {
+    state: Mutex<AiInstallRuntimeState>,
+}
+
+impl AiAssistantInstallRuntime {
+    fn try_start(&self, status: AiAssistantStatus) -> bool {
+        let mut state = self.state.lock().unwrap_or_else(|error| error.into_inner());
+        if state.active {
+            return false;
+        }
+
+        state.active = true;
+        state.status = Some(status);
+        true
+    }
+
+    fn update(&self, status: AiAssistantStatus) {
+        let mut state = self.state.lock().unwrap_or_else(|error| error.into_inner());
+        state.status = Some(status);
+    }
+
+    fn finish(&self, status: AiAssistantStatus) {
+        let mut state = self.state.lock().unwrap_or_else(|error| error.into_inner());
+        state.active = false;
+        state.status = Some(status);
+    }
+
+    fn clear(&self) {
+        let mut state = self.state.lock().unwrap_or_else(|error| error.into_inner());
+        state.active = false;
+        state.status = None;
+    }
+
+    fn current_status(&self) -> Option<AiAssistantStatus> {
+        let state = self.state.lock().unwrap_or_else(|error| error.into_inner());
+        state.status.clone()
+    }
+}
+
+fn read_ai_assistant_disk_status(app: AppHandle) -> Result<AiAssistantStatus, String> {
     let paths = resolve_ai_model_paths(&app)?;
     let metadata = read_model_metadata(&paths);
 
@@ -169,6 +216,22 @@ pub fn get_ai_assistant_status(app: AppHandle) -> Result<AiAssistantStatus, Stri
         message: None,
         progress: None,
     })
+}
+
+pub fn get_ai_assistant_status(
+    app: AppHandle,
+    install_runtime: &AiAssistantInstallRuntime,
+) -> Result<AiAssistantStatus, String> {
+    if let Some(status) = install_runtime.current_status() {
+        if matches!(
+            status.state,
+            AiAssistantInstallState::Installing | AiAssistantInstallState::Error
+        ) {
+            return Ok(status);
+        }
+    }
+
+    read_ai_assistant_disk_status(app)
 }
 
 fn get_progress_defaults(_paths: &AiModelPaths, total_bytes: Option<u64>) -> AiInstallProgress {
@@ -211,7 +274,19 @@ fn emit_install_status(app: &AppHandle, status: &AiAssistantStatus) {
     let _ = app.emit(AI_ASSISTANT_INSTALL_STATUS_EVENT, status.clone());
 }
 
-async fn download_model_to_disk(app: &AppHandle) -> Result<AiModelMetadata, String> {
+fn publish_install_status(
+    app: &AppHandle,
+    install_runtime: &AiAssistantInstallRuntime,
+    status: AiAssistantStatus,
+) {
+    install_runtime.update(status.clone());
+    emit_install_status(app, &status);
+}
+
+async fn download_model_to_disk(
+    app: &AppHandle,
+    install_runtime: &AiAssistantInstallRuntime,
+) -> Result<AiModelMetadata, String> {
     let paths = resolve_ai_model_paths(app)?;
     let model_dir = paths
         .model_file
@@ -224,21 +299,25 @@ async fn download_model_to_disk(app: &AppHandle) -> Result<AiModelMetadata, Stri
     // Remove any leftover partial file before we start.
     let _ = fs::remove_file(&temp_path);
 
-    emit_install_status(app, &installing_status("Starting download…", None));
+    publish_install_status(
+        app,
+        install_runtime,
+        installing_status("Starting download…", None),
+    );
 
     let client = reqwest::Client::new();
     let response = match client.get(ASSISTANT_MODEL.download_url).send().await {
         Ok(value) => value,
         Err(error) => {
             let message = format!("Failed to download model: {error}");
-            emit_install_status(app, &error_status(&message, None));
+            publish_install_status(app, install_runtime, error_status(&message, None));
             return Err(message);
         }
     };
 
     if !response.status().is_success() {
         let message = format!("Model download failed with status: {}", response.status());
-        emit_install_status(app, &error_status(&message, None));
+        publish_install_status(app, install_runtime, error_status(&message, None));
         return Err(message);
     }
 
@@ -246,9 +325,10 @@ async fn download_model_to_disk(app: &AppHandle) -> Result<AiModelMetadata, Stri
     let mut progress = get_progress_defaults(&paths, total_bytes);
     let mut downloaded_bytes = progress.downloaded_bytes;
 
-    emit_install_status(
+    publish_install_status(
         app,
-        &installing_status(
+        install_runtime,
+        installing_status(
             "Downloading assistant model…",
             Some(AiInstallProgress {
                 downloaded_bytes,
@@ -262,7 +342,11 @@ async fn download_model_to_disk(app: &AppHandle) -> Result<AiModelMetadata, Stri
         Ok(value) => value,
         Err(error) => {
             let message = format!("Failed to create temp model file: {error}");
-            emit_install_status(app, &error_status(&message, Some(progress.clone())));
+            publish_install_status(
+                app,
+                install_runtime,
+                error_status(&message, Some(progress.clone())),
+            );
             return Err(message);
         }
     };
@@ -281,13 +365,21 @@ async fn download_model_to_disk(app: &AppHandle) -> Result<AiModelMetadata, Stri
             Ok(value) => value,
             Err(error) => {
                 let message = format!("Download stream error: {error}");
-                emit_install_status(app, &error_status(&message, Some(progress.clone())));
+                publish_install_status(
+                    app,
+                    install_runtime,
+                    error_status(&message, Some(progress.clone())),
+                );
                 return Err(message);
             }
         };
         file.write_all(&chunk).await.map_err(|error| {
             let message = format!("Failed writing temp model file: {error}");
-            emit_install_status(app, &error_status(&message, Some(progress.clone())));
+            publish_install_status(
+                app,
+                install_runtime,
+                error_status(&message, Some(progress.clone())),
+            );
             message
         })?;
         hasher.update(&chunk);
@@ -300,9 +392,10 @@ async fn download_model_to_disk(app: &AppHandle) -> Result<AiModelMetadata, Stri
         if delta >= PROGRESS_EMIT_MIN_DELTA_BYTES
             || last_emit.elapsed() >= PROGRESS_EMIT_MIN_INTERVAL
         {
-            emit_install_status(
+            publish_install_status(
                 app,
-                &installing_status("Downloading assistant model…", Some(progress.clone())),
+                install_runtime,
+                installing_status("Downloading assistant model…", Some(progress.clone())),
             );
             last_emit = Instant::now();
             last_emit_bytes = downloaded_bytes;
@@ -311,13 +404,18 @@ async fn download_model_to_disk(app: &AppHandle) -> Result<AiModelMetadata, Stri
 
     file.flush().await.map_err(|error| {
         let message = format!("Failed flushing temp model file: {error}");
-        emit_install_status(app, &error_status(&message, Some(progress.clone())));
+        publish_install_status(
+            app,
+            install_runtime,
+            error_status(&message, Some(progress.clone())),
+        );
         message
     })?;
 
-    emit_install_status(
+    publish_install_status(
         app,
-        &installing_status("Verifying checksum…", Some(progress.clone())),
+        install_runtime,
+        installing_status("Verifying checksum…", Some(progress.clone())),
     );
 
     let sha_hex = format!("{:x}", hasher.finalize());
@@ -334,14 +432,19 @@ async fn download_model_to_disk(app: &AppHandle) -> Result<AiModelMetadata, Stri
                 "Downloaded model checksum mismatch (expected {expected}, got {}).",
                 metadata.model_sha256
             );
-            emit_install_status(app, &error_status(&message, Some(progress.clone())));
+            publish_install_status(
+                app,
+                install_runtime,
+                error_status(&message, Some(progress.clone())),
+            );
             return Err(message);
         }
     }
 
-    emit_install_status(
+    publish_install_status(
         app,
-        &installing_status("Finalizing installation…", Some(progress.clone())),
+        install_runtime,
+        installing_status("Finalizing installation…", Some(progress.clone())),
     );
 
     // Atomically move the temp file into place.
@@ -350,7 +453,11 @@ async fn download_model_to_disk(app: &AppHandle) -> Result<AiModelMetadata, Stri
         .await
         .map_err(|error| {
             let message = format!("Failed moving model into place: {error}");
-            emit_install_status(app, &error_status(&message, Some(progress.clone())));
+            publish_install_status(
+                app,
+                install_runtime,
+                error_status(&message, Some(progress.clone())),
+            );
             message
         })?;
 
@@ -362,26 +469,67 @@ async fn download_model_to_disk(app: &AppHandle) -> Result<AiModelMetadata, Stri
     .await
     .map_err(|error| {
         let message = format!("Failed writing model metadata: {error}");
-        emit_install_status(app, &error_status(&message, Some(progress.clone())));
+        publish_install_status(
+            app,
+            install_runtime,
+            error_status(&message, Some(progress.clone())),
+        );
         message
     })?;
 
     Ok(metadata)
 }
 
-pub async fn install_ai_assistant(app: AppHandle) -> Result<AiAssistantStatus, String> {
-    // Download + validate integrity, then return installed status.
-    if let Err(error) = download_model_to_disk(&app).await {
-        emit_install_status(&app, &error_status(&error, None));
-        return Err(error);
+pub async fn install_ai_assistant(
+    app: AppHandle,
+    install_runtime: std::sync::Arc<AiAssistantInstallRuntime>,
+) -> Result<AiAssistantStatus, String> {
+    let disk_status = read_ai_assistant_disk_status(app.clone())?;
+    if matches!(disk_status.state, AiAssistantInstallState::Installed) {
+        install_runtime.finish(disk_status.clone());
+        return Ok(disk_status);
     }
 
-    let final_status = get_ai_assistant_status(app.clone()).map_err(|error| error.to_string())?;
-    emit_install_status(&app, &final_status);
-    Ok(final_status)
+    let starting_status = installing_status("Starting download…", None);
+    if !install_runtime.try_start(starting_status.clone()) {
+        return Ok(install_runtime
+            .current_status()
+            .unwrap_or_else(|| starting_status.clone()));
+    }
+
+    emit_install_status(&app, &starting_status);
+
+    let task_app = app.clone();
+    let task_runtime = install_runtime.clone();
+    tauri::async_runtime::spawn(async move {
+        match download_model_to_disk(&task_app, &task_runtime).await {
+            Ok(_) => match read_ai_assistant_disk_status(task_app.clone()) {
+                Ok(final_status) => {
+                    task_runtime.finish(final_status.clone());
+                    emit_install_status(&task_app, &final_status);
+                }
+                Err(error) => {
+                    let status = error_status(&error, None);
+                    task_runtime.finish(status.clone());
+                    emit_install_status(&task_app, &status);
+                }
+            },
+            Err(error) => {
+                let status = error_status(&error, None);
+                task_runtime.finish(status.clone());
+                emit_install_status(&task_app, &status);
+            }
+        }
+    });
+
+    Ok(starting_status)
 }
 
-pub async fn remove_ai_assistant(app: AppHandle) -> Result<AiAssistantStatus, String> {
+pub async fn remove_ai_assistant(
+    app: AppHandle,
+    install_runtime: &AiAssistantInstallRuntime,
+) -> Result<AiAssistantStatus, String> {
+    install_runtime.clear();
     let paths = resolve_ai_model_paths(&app)?;
 
     let _ = tokio::fs::remove_file(&paths.model_file).await;
@@ -402,7 +550,7 @@ pub async fn remove_ai_assistant(app: AppHandle) -> Result<AiAssistantStatus, St
 }
 
 const GGUF_SIDE_CAR_BIN_NAME: &str = "llama-cli";
-const INFERENCE_TIMEOUT: Duration = Duration::from_secs(45);
+const INFERENCE_TIMEOUT: Duration = Duration::from_secs(90);
 const INFERENCE_N_PREDICT: &str = "256";
 
 fn resolve_gguf_sidecar_binary(app: &AppHandle) -> Result<PathBuf, String> {
@@ -836,6 +984,7 @@ Rules:
 - If the current request is unrelated to prior chat, ignore prior chat except for disambiguation.
 - Use pasted context only when the current request asks you to summarize, compare, or apply it.
 - The answer must directly answer the user's question first, in 1-2 concise paragraphs or a short ranked list.
+- If the current request asks what command to run, start the answer with that command and do not summarize recent events unless the user asks for a summary.
 - Do not use the answer field to restate the raw snapshot, dump logs, or list every finding.
 - Put investigation details in reasoning, sources, suggestedCommands, or stackTraces instead of the final answer.
 - Prefer read-only docker commands when unsure.
@@ -939,5 +1088,16 @@ mod tests {
             Some("Downloading assistant model…")
         );
         assert_eq!(status.progress.as_ref().and_then(|p| p.percent), Some(50.0));
+    }
+
+    #[test]
+    fn install_runtime_reports_active_install_after_remount_and_rejects_duplicate_start() {
+        let runtime = AiAssistantInstallRuntime::default();
+        let started = installing_status("Starting download…", None);
+
+        assert!(runtime.try_start(started.clone()));
+        assert_eq!(runtime.current_status().unwrap().message, started.message);
+        assert!(!runtime.try_start(installing_status("Starting duplicate download…", None)));
+        assert_eq!(runtime.current_status().unwrap().message, started.message);
     }
 }

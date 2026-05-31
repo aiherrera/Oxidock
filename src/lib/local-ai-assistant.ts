@@ -23,7 +23,7 @@ export type LocalAiAssistantStatus = {
 const DEFAULT_STATUS: LocalAiAssistantStatus = {
   state: "notInstalled",
   modelName: "oxidock-assist",
-  modelSizeLabel: "~380 MB",
+  modelSizeLabel: "~1.9 GB",
   message: null,
   progress: null,
 };
