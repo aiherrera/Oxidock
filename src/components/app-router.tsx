@@ -5,6 +5,7 @@ import type { CliHistoryEntry } from "./cli-playground-page";
 import type { DockerCommandLessonId } from "../lib/docker-command-lessons";
 import type { DockerCommandId } from "../lib/docker-command-registry";
 import type { AppPage } from "../types/app";
+import type { IntelligentSearchResult } from "../types/intelligent-search";
 import type { DockerStatus } from "../types/docker";
 import type { ThemePreference } from "../lib/theme-settings";
 
@@ -54,6 +55,7 @@ type AppRouterProps = {
   onResetImagesViewMode: () => void;
   onOpenSettingsPage: () => void;
   onDocsCommandTargetConsumed: () => void;
+  onSearchResultSelect: (result: IntelligentSearchResult) => void;
 };
 
 export function AppRouter({
@@ -83,6 +85,7 @@ export function AppRouter({
   onResetImagesViewMode,
   onOpenSettingsPage,
   onDocsCommandTargetConsumed,
+  onSearchResultSelect,
 }: AppRouterProps) {
   switch (activePage) {
     case "dashboard":
@@ -113,6 +116,7 @@ export function AppRouter({
             initialViewMode={imagesViewMode}
             searchQuery={searchQuery}
             onOpenPlayground={onOpenPlayground}
+            onSearchResultSelect={onSearchResultSelect}
             onViewModeApplied={onResetImagesViewMode}
           />
         </Suspense>

@@ -1,6 +1,8 @@
+import type React from "react";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { Sidebar } from "./sidebar";
+import { defaultShortcutSettings } from "../lib/shortcut-settings";
 import { APP_PAGE_SECTIONS, getAppPagesBySection } from "../types/app";
 
 vi.mock("../hooks/use-engine-lifecycle", () => ({
@@ -17,6 +19,12 @@ vi.mock("./sidebar-resource-panel", () => ({
 
 vi.mock("./brand-logo", () => ({
   BrandLogo: () => <div data-testid="brand-logo" />,
+}));
+
+vi.mock("./ui/tooltip", () => ({
+  Tooltip: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+  TooltipTrigger: ({ children, ...props }: React.ComponentProps<"button">) => <button {...props}>{children}</button>,
+  TooltipContent: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
 }));
 
 const baseStatus = {
@@ -49,7 +57,7 @@ describe("Sidebar", () => {
     );
 
     for (const section of APP_PAGE_SECTIONS) {
-      expect(screen.getByText(section.label)).toBeInTheDocument();
+      expect(screen.getAllByText(section.label).length).toBeGreaterThan(0);
     }
 
     for (const page of getAppPagesBySection("overview")) {
@@ -99,5 +107,24 @@ describe("Sidebar", () => {
     );
 
     expect(screen.getByTestId("sidebar-resource-panel")).toBeInTheDocument();
+  });
+
+  it("shows the configured shortcut in navigation item tooltips", () => {
+    render(
+      <Sidebar
+        activePage="dashboard"
+        isLoading={false}
+        shortcutSettings={{
+          ...defaultShortcutSettings(),
+          navigateContainers: "ctrl+shift+c",
+          navigateAssistant: "ctrl+shift+a",
+        }}
+        status={baseStatus}
+        onPageChange={vi.fn()}
+      />
+    );
+
+    expect(screen.getByText("Ctrl+Shift+C")).toBeInTheDocument();
+    expect(screen.getByText("Ctrl+Shift+A")).toBeInTheDocument();
   });
 });

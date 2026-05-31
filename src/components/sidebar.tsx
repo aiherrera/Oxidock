@@ -2,6 +2,12 @@ import { useEffect, useState } from "react";
 import type { AppPage } from "../types/app";
 import { APP_PAGE_SECTIONS, getAppPagesBySection } from "../types/app";
 import type { DockerStatus } from "../types/docker";
+import {
+  defaultShortcutSettings,
+  formatShortcutLabel,
+  type ShortcutActionId,
+  type ShortcutSettings,
+} from "../lib/shortcut-settings";
 import { BrandLogo } from "./brand-logo";
 import { SidebarResourcePanel } from "./sidebar-resource-panel";
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
@@ -24,6 +30,7 @@ type SidebarProps = {
   activePage: AppPage;
   status: DockerStatus | null;
   isLoading: boolean;
+  shortcutSettings?: ShortcutSettings;
   autoCollapse?: boolean;
   onEngineChanged?: (revision: number) => void;
   onPageChange: (page: AppPage) => void;
@@ -59,7 +66,24 @@ const pageIcons: Record<AppPage, typeof IconBox> = {
   settings: IconDashboard,
 };
 
-export function Sidebar({ activePage, autoCollapse = false, onPageChange }: SidebarProps) {
+const pageShortcutActions: Partial<Record<AppPage, ShortcutActionId>> = {
+  containers: "navigateContainers",
+  images: "navigateImages",
+  volumes: "navigateVolumes",
+  networks: "navigateNetworks",
+  events: "navigateEvents",
+  logs: "navigateLogs",
+  docs: "navigateDocs",
+  cli: "navigateCli",
+  assistant: "navigateAssistant",
+};
+
+export function Sidebar({
+  activePage,
+  autoCollapse = false,
+  shortcutSettings = defaultShortcutSettings(),
+  onPageChange,
+}: SidebarProps) {
   const [isCompact, setIsCompact] = useState(false);
 
   useEffect(() => {
@@ -84,6 +108,9 @@ export function Sidebar({ activePage, autoCollapse = false, onPageChange }: Side
     const Icon = pageIcons[page.id];
     const isActive = activePage === page.id;
     const sectionLabel = APP_PAGE_SECTIONS.find((section) => section.id === page.section)?.label ?? "Navigate";
+    const shortcutAction = pageShortcutActions[page.id];
+    const shortcutBinding = shortcutAction ? shortcutSettings[shortcutAction] : null;
+    const shortcutLabel = shortcutBinding ? formatShortcutLabel(shortcutBinding) : null;
 
     return (
       <li key={page.id}>
@@ -121,6 +148,11 @@ export function Sidebar({ activePage, autoCollapse = false, onPageChange }: Side
                     <span className="rounded-full border border-(--accent)/40 bg-(--accent-soft) px-2 py-0.5 text-[0.62rem] font-semibold uppercase tracking-[0.16em] text-(--accent)">
                       Active
                     </span>
+                  ) : null}
+                  {shortcutLabel ? (
+                    <kbd className="ml-auto shrink-0 rounded-md border border-(--border) bg-(--surface-hover) px-1.5 py-0.5 text-[0.65rem] font-semibold leading-none text-(--text-muted)">
+                      {shortcutLabel}
+                    </kbd>
                   ) : null}
                 </span>
                 <span className="mt-1.5 block text-xs leading-5 text-(--text-muted)">{pageDescriptions[page.id]}</span>

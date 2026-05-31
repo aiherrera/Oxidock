@@ -167,7 +167,7 @@ export function DashboardPage({ dockerStatus, engineRevision, onNavigate, onOpen
       {isLoading ? (
         <PageLoadingSkeleton rows={4} />
       ) : (
-        <div className="space-y-6 p-4 sm:p-6">
+        <div className="min-h-0 flex-1 space-y-6 overflow-auto p-4 sm:p-6">
           <section className="rounded-xl border border-(--border) bg-(--surface) p-4 sm:p-5">
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div>

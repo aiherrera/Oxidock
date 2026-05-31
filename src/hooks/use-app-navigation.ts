@@ -114,8 +114,9 @@ export function useAppNavigation({
       "navigateNetworks",
       "navigateEvents",
       "navigateLogs",
-      "navigateCli",
       "navigateDocs",
+      "navigateCli",
+      "navigateAssistant",
     ];
 
     for (const actionId of navigationActions) {

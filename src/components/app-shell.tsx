@@ -1,4 +1,5 @@
 import type { ReactNode, Ref } from "react";
+import type { AppPage } from "../types/app";
 import type { IntelligentSearchResult } from "../types/intelligent-search";
 import type { DockerStatus } from "../types/docker";
 import { TitleBar, type TitleBarHandle } from "./title-bar";
@@ -7,6 +8,7 @@ type AppShellProps = {
   sidebar: ReactNode;
   children: ReactNode;
   searchQuery: string;
+  activePage?: AppPage;
   searchEnabled?: boolean;
   searchShortcutLabel?: string;
   isLoading: boolean;
@@ -24,6 +26,7 @@ export function AppShell({
   sidebar,
   children,
   searchQuery,
+  activePage,
   searchEnabled = true,
   searchShortcutLabel,
   isLoading,
@@ -41,6 +44,7 @@ export function AppShell({
       <TitleBar
         ref={titleBarRef}
         isLoading={isLoading}
+        activePage={activePage}
         searchEnabled={searchEnabled}
         searchQuery={searchQuery}
         searchShortcutLabel={searchShortcutLabel}

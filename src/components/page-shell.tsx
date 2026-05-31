@@ -3,7 +3,8 @@ import { alertDanger } from "../lib/theme-classes";
 import { OverviewFooter } from "./overview-footer";
 
 type PageShellProps = {
-  title: string;
+  title: ReactNode;
+  titleAccessory?: ReactNode;
   description: string;
   isLoading: boolean;
   errorMessage: string | null;
@@ -12,13 +13,24 @@ type PageShellProps = {
   children: ReactNode;
 };
 
-export function PageShell({ title, description, errorMessage, actions, footerStatusLabel, children }: PageShellProps) {
+export function PageShell({
+  title,
+  titleAccessory,
+  description,
+  errorMessage,
+  actions,
+  footerStatusLabel,
+  children,
+}: PageShellProps) {
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="relative z-20 space-y-4 border-b border-(--border) bg-(--bg) px-4 py-5 sm:px-6">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="min-w-0">
-            <h1 className="text-xl font-semibold tracking-tight text-(--text-primary) sm:text-2xl">{title}</h1>
+            <div className="flex items-center gap-2">
+              <h1 className="text-xl font-semibold tracking-tight text-(--text-primary) sm:text-2xl">{title}</h1>
+              {titleAccessory}
+            </div>
             <p className="mt-1 text-sm text-(--text-muted)">{description}</p>
           </div>
 

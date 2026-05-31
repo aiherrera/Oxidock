@@ -1,5 +1,6 @@
 import { forwardRef, useImperativeHandle, useRef, useState } from "react";
 import { useIntelligentSearch } from "../hooks/use-intelligent-search";
+import type { AppPage } from "../types/app";
 import type { IntelligentSearchResult } from "../types/intelligent-search";
 import type { DockerStatus } from "../types/docker";
 import { GlobalSearchPalette, type GlobalSearchPaletteHandle } from "./global-search-palette";
@@ -12,6 +13,7 @@ export type TitleBarHandle = {
 
 type TitleBarProps = {
   searchQuery: string;
+  activePage?: AppPage;
   searchEnabled?: boolean;
   searchShortcutLabel?: string;
   isLoading: boolean;
@@ -27,6 +29,7 @@ type TitleBarProps = {
 export const TitleBar = forwardRef<TitleBarHandle, TitleBarProps>(function TitleBar(
   {
     searchQuery,
+    activePage,
     searchEnabled = true,
     searchShortcutLabel = "⌘K",
     isLoading,
@@ -47,6 +50,7 @@ export const TitleBar = forwardRef<TitleBarHandle, TitleBarProps>(function Title
 
   const { groups, isSearchingRegistry, registryMessage } = useIntelligentSearch({
     query: searchQuery,
+    currentPage: activePage,
     enabled: searchEnabled && paletteOpen,
     dockerRunning: isRunning,
     engineRevision,

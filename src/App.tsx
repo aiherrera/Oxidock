@@ -147,6 +147,7 @@ function App() {
       docsLessonId={docsLessonId}
       docsCommandId={docsCommandId}
       onDocsCommandTargetConsumed={() => setDocsCommandId(undefined)}
+      onSearchResultSelect={(result) => void handleSearchResultSelect(result)}
       engineRevision={engineRevision}
       imagesViewMode={imagesViewMode}
       isLoadingStatus={isLoadingStatus}
@@ -173,6 +174,7 @@ function App() {
 
   return (
     <AppShell
+      activePage={activePage}
       dockerStatus={dockerStatus}
       engineRevision={engineRevision}
       isLoading={isLoadingStatus}
@@ -185,6 +187,7 @@ function App() {
           activePage={activePage}
           autoCollapse={activePage === "cli" || activePage === "docs" || activePage === "assistant"}
           isLoading={isLoadingStatus}
+          shortcutSettings={shortcutSettings}
           status={dockerStatus}
           onEngineChanged={handleEngineChanged}
           onPageChange={setActivePage}
