@@ -11,6 +11,7 @@ export type AssistantIntent =
   | "explain_memory"
   | "explain_volumes"
   | "explain_networks"
+  | "suggest_command"
   | "suggest_next_step"
   | "clarify"
   | "out_of_scope";
@@ -67,7 +68,34 @@ const FAILURE_PATTERN =
 const NEXT_STEP_PATTERN =
   /\b(what should i|what next|next step|recommend|suggest|help me|where do i start|what do i do)\b/i;
 
+const COMMAND_REQUEST_PATTERN =
+  /\b((what|which)\s+(docker\s+)?commands?|commands?\s+(can|should)\s+i\s+run|what\s+should\s+i\s+run|run\s+to\s+\w+|cli|shell\s+command)\b/i;
+
+export const isCommandRequestText = (text: string): boolean => COMMAND_REQUEST_PATTERN.test(text);
+
+export const isMemoryPressureMitigationText = (text: string): boolean =>
+  MEMORY_PATTERN.test(text) && /\b(reduce|lower|relieve|free|limit|pressure|safely|safe)\b/i.test(text);
+
 const GREETING_PATTERN = /^(hi|hello|hey|thanks|thank you)\.?$/i;
+
+const DIRECT_FAILURE_QUESTION_PATTERN = /\b(what failed|what.?s wrong|any issues|anything wrong)\b/i;
+
+const INTENT_PRIORITY: Record<AssistantIntent, number> = {
+  suggest_command: 0,
+  list_cleanup_candidates: 1,
+  diagnose_container: 2,
+  explain_memory: 3,
+  explain_events: 4,
+  explain_images: 5,
+  explain_volumes: 6,
+  explain_networks: 7,
+  suggest_next_step: 8,
+  compare_context_to_state: 9,
+  summarize_context: 10,
+  explain_context: 11,
+  clarify: 12,
+  out_of_scope: 13,
+};
 
 const hasPastedContext = (pastedContext: string | undefined): boolean => Boolean(pastedContext?.trim());
 
@@ -126,6 +154,60 @@ const isOutOfScopeRequest = (currentRequest: string, pastedContext: string | und
   return false;
 };
 
+const classifyDockerIntentBySignals = (trimmed: string): AssistantIntent => {
+  const scores = new Map<AssistantIntent, number>();
+  const addScore = (intent: AssistantIntent, score: number) => {
+    scores.set(intent, (scores.get(intent) ?? 0) + score);
+  };
+
+  if (isCommandRequestText(trimmed)) {
+    addScore("suggest_command", 140);
+  }
+
+  if (NEXT_STEP_PATTERN.test(trimmed)) {
+    addScore("suggest_next_step", 80);
+  }
+
+  if (CLEANUP_PATTERN.test(trimmed)) {
+    addScore("list_cleanup_candidates", 155);
+  }
+
+  if (FAILURE_PATTERN.test(trimmed) || DIRECT_FAILURE_QUESTION_PATTERN.test(trimmed)) {
+    addScore("diagnose_container", 90);
+  }
+
+  if (MEMORY_PATTERN.test(trimmed)) {
+    addScore("explain_memory", 75);
+  }
+
+  if (EVENT_PATTERN.test(trimmed)) {
+    addScore("explain_events", 75);
+  }
+
+  if (IMAGE_PATTERN.test(trimmed)) {
+    addScore("explain_images", 75);
+  }
+
+  if (VOLUME_PATTERN.test(trimmed)) {
+    addScore("explain_volumes", 75);
+  }
+
+  if (NETWORK_PATTERN.test(trimmed)) {
+    addScore("explain_networks", 75);
+  }
+
+  if (getIntentSuggestions(trimmed, 1).suggestions.length > 0) {
+    addScore("suggest_next_step", 45);
+  }
+
+  const [best] = [...scores.entries()].sort(
+    ([leftIntent, leftScore], [rightIntent, rightScore]) =>
+      rightScore - leftScore || INTENT_PRIORITY[leftIntent] - INTENT_PRIORITY[rightIntent]
+  );
+
+  return best?.[0] ?? "diagnose_container";
+};
+
 const classifyScopedIntent = (
   currentRequest: string,
   pastedContext: string | undefined,
@@ -175,51 +257,13 @@ const classifyScopedIntent = (
     return "compare_context_to_state";
   }
 
-  if (CLEANUP_PATTERN.test(trimmed)) {
-    return "list_cleanup_candidates";
-  }
+  const scoredIntent = classifyDockerIntentBySignals(trimmed);
 
-  if (EVENT_PATTERN.test(trimmed)) {
-    return "explain_events";
-  }
-
-  if (MEMORY_PATTERN.test(trimmed)) {
-    return "explain_memory";
-  }
-
-  if (IMAGE_PATTERN.test(trimmed)) {
-    return "explain_images";
-  }
-
-  if (VOLUME_PATTERN.test(trimmed)) {
-    return "explain_volumes";
-  }
-
-  if (NETWORK_PATTERN.test(trimmed)) {
-    return "explain_networks";
-  }
-
-  if (FAILURE_PATTERN.test(trimmed)) {
-    return "diagnose_container";
-  }
-
-  if (NEXT_STEP_PATTERN.test(trimmed)) {
-    return "suggest_next_step";
-  }
-
-  if (/\b(what failed|what.?s wrong|any issues|anything wrong)\b/i.test(trimmed)) {
-    return "diagnose_container";
-  }
-
-  if (getIntentSuggestions(trimmed, 1).suggestions.length > 0) {
-    return "suggest_next_step";
-  }
-
-  if (hasPastedContext(pastedContext)) {
+  if (scoredIntent === "diagnose_container" && hasPastedContext(pastedContext) && !isDockerDomainText(trimmed)) {
     return "explain_context";
   }
 
-  return "diagnose_container";
+  return scoredIntent;
 };
 
 const intentLabels: Record<AssistantIntent, string> = {
@@ -233,6 +277,7 @@ const intentLabels: Record<AssistantIntent, string> = {
   explain_memory: "Explain container memory usage",
   explain_volumes: "Explain Docker volumes",
   explain_networks: "Explain Docker networks",
+  suggest_command: "Suggest Docker command",
   suggest_next_step: "Suggest next troubleshooting step",
   clarify: "Ask for clarification",
   out_of_scope: "Out of app scope",

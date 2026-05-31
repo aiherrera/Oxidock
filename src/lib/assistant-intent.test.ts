@@ -32,6 +32,31 @@ describe("classifyAssistantIntent", () => {
     expect(images.intent).toBe("explain_images");
   });
 
+  it("routes command-seeking event questions to command guidance", () => {
+    const result = classifyAssistantIntent({
+      currentRequest: "What command should I run to monitor new events?",
+    });
+
+    expect(result.intent).toBe("suggest_command");
+    expect(result.inScope).toBe(true);
+  });
+
+  it("lets command request shape outrank memory keywords", () => {
+    const result = classifyAssistantIntent({
+      currentRequest: "What command should I run to confirm current memory usage?",
+    });
+
+    expect(result.intent).toBe("suggest_command");
+  });
+
+  it("lets command request shape outrank failure keywords", () => {
+    const result = classifyAssistantIntent({
+      currentRequest: "What safe commands can I run to diagnose this restart loop?",
+    });
+
+    expect(result.intent).toBe("suggest_command");
+  });
+
   it("routes cleanup questions to list_cleanup_candidates", () => {
     const result = classifyAssistantIntent({
       currentRequest: "What should I review before deleting Docker resources?",

@@ -125,6 +125,48 @@ describe("buildDeterministicResponse", () => {
     ]);
   });
 
+  it("does not suggest memory-limit increases for safe memory-pressure reduction", () => {
+    const pressureSnapshot: AppInsightsContextSnapshot = {
+      ...snapshot,
+      containers: [
+        {
+          id: "api-id",
+          shortId: "api",
+          name: "gen-bench-api-1",
+          image: "api:latest",
+          state: "running",
+          status: "Up 40 hours",
+          project: null,
+          service: "api",
+          memoryPercent: "1.09%",
+        },
+        {
+          id: "db-id",
+          shortId: "db",
+          name: "backend-engine-db-1",
+          image: "postgres:16",
+          state: "exited",
+          status: "Exited (137) 40 hours ago",
+          project: null,
+          service: "postgres",
+        },
+      ],
+    };
+
+    const response = buildDeterministicResponse(
+      pressureSnapshot,
+      buildDeterministicInsights(pressureSnapshot),
+      requestFor("How can I reduce memory pressure safely?", {
+        currentRequest: "How can I reduce memory pressure safely?",
+      })
+    );
+
+    expect(response.answer).toContain("I do not see acute live memory pressure");
+    expect(response.suggestedCommands.map((command) => command.command)).not.toContain(
+      "docker update --memory=1g --memory-swap=2g backend-engine-db-1"
+    );
+  });
+
   it("does not carry failure reasoning or commands into volume answers", () => {
     const volumeSnapshot: AppInsightsContextSnapshot = {
       ...snapshot,
@@ -223,6 +265,41 @@ describe("buildDeterministicResponse", () => {
     expect(imageResponse.answer).toContain("image(s) still attached");
     expect(eventResponse.answer).not.toContain("image(s) still attached");
     expect(imageResponse.answer).not.toContain("Recent events:");
+  });
+
+  it("answers command-seeking event questions with a suggested Docker events command", () => {
+    const richSnapshot: AppInsightsContextSnapshot = {
+      ...snapshot,
+      recentEvents: [
+        {
+          time: "2026-05-28T12:00:00Z",
+          action: "die",
+          actorName: "api",
+          typ: "container",
+        },
+      ],
+      matchedDocs: [
+        {
+          id: "events.stream",
+          label: "Stream events",
+          example: "docker events --since 1h",
+          risk: "safe",
+        },
+      ],
+    };
+
+    const response = buildDeterministicResponse(
+      richSnapshot,
+      buildDeterministicInsights(richSnapshot),
+      requestFor("What command should I run to monitor new events?", {
+        currentRequest: "What command should I run to monitor new events?",
+      })
+    );
+
+    expect(response.answer).toContain("`docker events`");
+    expect(response.answer).not.toContain("Recent events:");
+    expect(response.answer).not.toContain("suspicious event");
+    expect(response.suggestedCommands.map((command) => command.command)).toContain("docker events --since 1h");
   });
 
   it("summarizes pasted context without defaulting to docker failures", () => {

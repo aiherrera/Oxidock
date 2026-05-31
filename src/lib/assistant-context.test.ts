@@ -91,6 +91,10 @@ describe("resolveAssistantIntent", () => {
     expect(resolveAssistantIntent("Which images are still attached to containers?").intent).toBe("explain_images");
   });
 
+  it("routes command-seeking event questions to command guidance", () => {
+    expect(resolveAssistantIntent("What command should I run to monitor new events?").intent).toBe("suggest_command");
+  });
+
   it("routes architecture questions with pasted text to explain_context", () => {
     const resolved = resolveAssistantIntent("how is the architecture of oxidock?\n\n## Architecture\n\nTauri stack.");
     expect(resolved.intent).toBe("explain_context");
@@ -209,6 +213,26 @@ describe("buildDeterministicAnswer", () => {
     expect(answer).not.toContain("Snapshot:");
   });
 
+  it("answers memory pressure mitigation questions with safe actions instead of a generic ranking", () => {
+    const snapshot = baseSnapshot();
+    snapshot.containers = snapshot.containers.map((container) => ({
+      ...container,
+      memoryPercent: container.name === "postgres" ? "1.09%" : "0.64%",
+    }));
+
+    const answer = buildDeterministicAnswer(
+      snapshot,
+      buildDeterministicInsights(snapshot),
+      "How can I reduce memory pressure safely?"
+    );
+
+    expect(answer).toContain("I do not see acute live memory pressure");
+    expect(answer).toContain("docker stats --no-stream");
+    expect(answer).toContain("Avoid raising memory limits");
+    expect(answer).not.toContain("is using the most memory right now");
+    expect(answer).not.toContain("Top memory users:");
+  });
+
   it("answers image attachment questions without leading with unrelated OOM findings", () => {
     const snapshot = baseSnapshot();
     const answer = buildDeterministicAnswer(
@@ -255,5 +279,28 @@ describe("buildDeterministicAnswer", () => {
     expect(volumeAnswer).not.toContain("OOM-killed");
     expect(networkAnswer).toContain("bridge");
     expect(networkAnswer).not.toContain("OOM-killed");
+  });
+
+  it("answers command-seeking event questions with the Docker events command first", () => {
+    const snapshot = baseSnapshot();
+    snapshot.matchedDocs = [
+      {
+        id: "events.stream",
+        label: "Stream events",
+        example: "docker events --since 1h",
+        risk: "safe",
+      },
+    ];
+
+    const answer = buildDeterministicAnswer(
+      snapshot,
+      buildDeterministicInsights(snapshot),
+      "What command should I run to monitor new events?"
+    );
+
+    expect(answer).toContain("`docker events`");
+    expect(answer).toContain("docker events --since 1h");
+    expect(answer).not.toContain("Recent events:");
+    expect(answer).not.toContain("suspicious event");
   });
 });

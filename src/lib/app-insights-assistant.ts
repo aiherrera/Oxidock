@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { DockerCommandRisk } from "./docker-command-registry";
+import { getDockerCommand, type DockerCommandRisk } from "./docker-command-registry";
 import {
   buildDeterministicAnswer,
   buildDeterministicInsights,
@@ -12,7 +12,13 @@ import {
   type AppInsightsContextSnapshot,
   type DeterministicInsight,
 } from "./assistant-context";
-import { classifyAssistantIntent, parseAssistantQuestionParts, type AssistantIntent } from "./assistant-intent";
+import {
+  classifyAssistantIntent,
+  isCommandRequestText,
+  isMemoryPressureMitigationText,
+  parseAssistantQuestionParts,
+  type AssistantIntent,
+} from "./assistant-intent";
 import { getInvokeErrorMessage } from "./local-ai-assistant";
 import type { DockerStatus } from "../types/docker";
 
@@ -185,6 +191,40 @@ const insightsToCommands = (insights: DeterministicInsight[]): AppInsightsSugges
   return commands.slice(0, 5);
 };
 
+const toCommandRisk = (risk: string): DockerCommandRisk =>
+  risk === "medium" || risk === "destructive" || risk === "safe" ? risk : "safe";
+
+const matchedDocsToCommands = (snapshot: AppInsightsContextSnapshot): AppInsightsSuggestedCommand[] =>
+  snapshot.matchedDocs.slice(0, 5).map((doc) => {
+    const command = getDockerCommand(doc.id);
+
+    return {
+      command: doc.example,
+      label: command?.label ?? doc.label,
+      explanation: command?.explanation ?? doc.label,
+      risk: toCommandRisk(doc.risk),
+    };
+  });
+
+const mergeSuggestedCommands = (
+  primary: AppInsightsSuggestedCommand[],
+  secondary: AppInsightsSuggestedCommand[]
+): AppInsightsSuggestedCommand[] => {
+  const seen = new Set<string>();
+  const merged: AppInsightsSuggestedCommand[] = [];
+
+  for (const command of [...primary, ...secondary]) {
+    if (seen.has(command.command)) {
+      continue;
+    }
+
+    seen.add(command.command);
+    merged.push(command);
+  }
+
+  return merged.slice(0, 5);
+};
+
 const extractStackTraces = (
   snapshot: AppInsightsContextSnapshot,
   insights: DeterministicInsight[]
@@ -292,6 +332,13 @@ export const buildDeterministicResponse = (
   }
 
   const supportInsights = filterInsightsForQuestion(insights, request.combinedQuestion, snapshot, request.intent);
+  const isMemoryMitigationRequest =
+    request.intent === "explain_memory" && isMemoryPressureMitigationText(request.currentRequest);
+  const supportCommands = isMemoryMitigationRequest ? [] : insightsToCommands(supportInsights);
+  const commandDocCommands =
+    (request.intent === "suggest_command" && isCommandRequestText(request.currentRequest)) || isMemoryMitigationRequest
+      ? matchedDocsToCommands(snapshot)
+      : [];
 
   return {
     answer: buildDeterministicAnswer(snapshot, insights, request.combinedQuestion, {
@@ -303,7 +350,7 @@ export const buildDeterministicResponse = (
       ? supportInsights.map((insight) => `- ${insight.title}: ${insight.detail}`).join("\n")
       : null,
     sources: insightsToSources(snapshot, supportInsights, request.intent),
-    suggestedCommands: insightsToCommands(supportInsights),
+    suggestedCommands: mergeSuggestedCommands(commandDocCommands, supportCommands),
     stackTraces: extractStackTraces(snapshot, supportInsights),
     usedModel: false,
   };

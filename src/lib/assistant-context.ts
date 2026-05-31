@@ -1,4 +1,10 @@
-import { classifyAssistantIntent, parseAssistantQuestionParts, type AssistantIntent } from "./assistant-intent";
+import {
+  classifyAssistantIntent,
+  isCommandRequestText,
+  isMemoryPressureMitigationText,
+  parseAssistantQuestionParts,
+  type AssistantIntent,
+} from "./assistant-intent";
 import {
   dockerCommandList,
   getDockerCommand,
@@ -255,6 +261,7 @@ export const filterInsightsForQuestion = (
     case "summarize_context":
     case "explain_context":
     case "compare_context_to_state":
+    case "suggest_command":
       return [];
 
     case "explain_memory":
@@ -563,6 +570,27 @@ const buildEventAnswer = (snapshot: AppInsightsContextSnapshot): string => {
   ].join("\n");
 };
 
+const buildCommandAnswer = (snapshot: AppInsightsContextSnapshot): string | null => {
+  const matchedDoc = snapshot.matchedDocs[0];
+  if (!matchedDoc) {
+    return null;
+  }
+
+  const command = getDockerCommand(matchedDoc.id);
+  const primaryCommand = command?.cli ?? matchedDoc.example;
+  const example = matchedDoc.example !== primaryCommand ? matchedDoc.example : null;
+
+  return [
+    `Run \`${primaryCommand}\`. ${command?.explanation ?? matchedDoc.label}.`,
+    example ? `If you only want recent history, use \`${example}\`.` : null,
+    command?.description && /stream|press ctrl\+c/i.test(command.description)
+      ? "Press Ctrl+C when you are done streaming."
+      : null,
+  ]
+    .filter((line): line is string => Boolean(line))
+    .join("\n\n");
+};
+
 const buildVolumeAnswer = (snapshot: AppInsightsContextSnapshot): string => {
   if (snapshot.volumes.length === 0) {
     return "I do not see Docker volumes in the current snapshot.";
@@ -611,6 +639,44 @@ const buildMemoryAnswer = (
     )
     .sort((a, b) => b.memoryPercent - a.memoryPercent);
   const oomInsights = insights.filter((insight) => insight.id.startsWith("oom-"));
+
+  if (isMemoryPressureMitigationText(question)) {
+    const top = memoryRankings[0];
+    const hasAcutePressure = memoryRankings.some((entry) => entry.memoryPercent >= 85);
+    const lines = [
+      hasAcutePressure
+        ? `I see live memory pressure: **${top?.container.name ?? "a container"}** is at **${top?.container.memoryPercent ?? "unknown"}** of its configured limit.`
+        : "I do not see acute live memory pressure in the current snapshot.",
+      "",
+      "Safe next steps:",
+      "- Confirm current usage with `docker stats --no-stream` before changing limits or restarting anything.",
+      "- Inspect the top consumer first and look for app-level leaks, cache growth, or unusually large workloads.",
+      "- Stop or restart only non-critical containers after you have confirmed they are the source of pressure.",
+      "- Avoid raising memory limits as the first response; that can hide leaks and increase host pressure.",
+    ];
+
+    if (memoryRankings.length > 0) {
+      lines.push(
+        "",
+        "Current memory signal:",
+        ...memoryRankings
+          .slice(0, 5)
+          .map(({ container }) => `- **${container.name}**: ${container.memoryPercent} (${container.status})`)
+      );
+    }
+
+    if (oomInsights.length > 0) {
+      lines.push(
+        "",
+        `Past OOM/137 history is separate from current pressure: ${oomInsights
+          .slice(0, 3)
+          .map((insight) => `**${insight.title}**`)
+          .join(", ")}. Check logs before changing limits.`
+      );
+    }
+
+    return lines.join("\n");
+  }
 
   if (memoryRankings.length > 0) {
     const [top] = memoryRankings;
@@ -1005,6 +1071,13 @@ export const buildDeterministicAnswer = (
       lines.push("", `Related docs: ${snapshot.matchedDocs.map((doc) => doc.label).join(", ")}.`);
     }
     return lines.join("\n");
+  }
+
+  if (intent === "suggest_command" && isCommandRequestText(resolved.currentRequest || question)) {
+    const commandAnswer = buildCommandAnswer(snapshot);
+    if (commandAnswer) {
+      return commandAnswer;
+    }
   }
 
   switch (intent) {
