@@ -5,10 +5,12 @@ import { PageEmptyState, PageLoadingSkeleton, PageShell } from "./page-shell";
 import { ResourceBulkActionsBar } from "./resource-bulk-actions-bar";
 import { ResourceSelectionHeaderCheckbox, ResourceSelectionRowCheckbox } from "./resource-selection-checkbox";
 import { useBulkResourceDelete } from "../hooks/use-bulk-resource-delete";
+import { searchLearnResults } from "../lib/intelligent-search";
 import { filterByQuery, toErrorMessage } from "../lib/search-utils";
-import { alertSuccess, alertWarning, statusBadgeSuccess } from "../lib/theme-classes";
+import { alertSuccess, alertWarning, statusBadgeInfo, statusBadgeSuccess } from "../lib/theme-classes";
 import { fetchRegistries, searchRegistryImages } from "../lib/tauri-registry";
 import { classifyDockerCommand, fetchImages, runDockerCommand } from "../lib/tauri-docker";
+import type { IntelligentSearchResult } from "../types/intelligent-search";
 import type { DockerStatus, ImageInfo } from "../types/docker";
 import type { RegistryConfigPublic, RegistrySearchResult } from "../types/registry";
 
@@ -20,6 +22,7 @@ type ImagesPageProps = {
   searchQuery: string;
   initialViewMode?: ImagesViewMode;
   onOpenPlayground?: (command: string) => void;
+  onSearchResultSelect?: (result: IntelligentSearchResult) => void;
   onViewModeApplied?: () => void;
 };
 
@@ -29,6 +32,7 @@ export function ImagesPage({
   searchQuery,
   initialViewMode = "local",
   onOpenPlayground,
+  onSearchResultSelect,
   onViewModeApplied,
 }: ImagesPageProps) {
   const [viewMode, setViewMode] = useState<ImagesViewMode>(initialViewMode);
@@ -111,8 +115,11 @@ export function ImagesPage({
     }
   }, [searchQuery, selectedRegistryId]);
 
+  const trimmedSearchQuery = searchQuery.trim();
+  const isUnifiedSearch = trimmedSearchQuery.length > 0;
+
   useEffect(() => {
-    if (viewMode !== "registry") {
+    if (!isUnifiedSearch && viewMode !== "registry") {
       return;
     }
 
@@ -121,12 +128,22 @@ export function ImagesPage({
     }, 350);
 
     return () => window.clearTimeout(handle);
-  }, [engineRevision, viewMode, runRegistrySearch]);
+  }, [engineRevision, isUnifiedSearch, viewMode, runRegistrySearch]);
 
   const filteredImages = useMemo(
     () => filterByQuery(images, searchQuery, (image) => [image.repository, image.tag, image.id, image.shortId]),
     [images, searchQuery]
   );
+
+  const learnResults = useMemo(() => {
+    if (!isUnifiedSearch) {
+      return [];
+    }
+
+    return searchLearnResults(trimmedSearchQuery).filter(
+      (result) => result.kind === "command" || result.kind === "lesson"
+    );
+  }, [isUnifiedSearch, trimmedSearchQuery]);
 
   const bulkDelete = useBulkResourceDelete({
     items: filteredImages,
@@ -135,15 +152,18 @@ export function ImagesPage({
   });
 
   useEffect(() => {
-    if (viewMode !== "local") {
+    if (!isUnifiedSearch && viewMode !== "local") {
       bulkDelete.selection.clear();
     }
-  }, [viewMode, bulkDelete.selection.clear]);
+  }, [isUnifiedSearch, viewMode, bulkDelete.selection.clear]);
 
   const combinedError = errorMessage ?? bulkDelete.deleteErrorMessage;
 
-  const footerStatusLabel =
-    viewMode === "local" ? `Showing ${filteredImages.length} images` : `Showing ${registryResults.length} results`;
+  const footerStatusLabel = isUnifiedSearch
+    ? `Showing ${filteredImages.length} local, ${registryResults.length} registry, ${learnResults.length} command matches`
+    : viewMode === "local"
+      ? `Showing ${filteredImages.length} images`
+      : `Showing ${registryResults.length} results`;
 
   const handlePull = async (pullReference: string) => {
     if (!dockerStatus?.isRunning) {
@@ -207,7 +227,7 @@ export function ImagesPage({
       <PageShell
         actions={
           <div className="flex flex-wrap items-center gap-2">
-            {viewMode === "local" ? (
+            {viewMode === "local" || isUnifiedSearch ? (
               <ResourceBulkActionsBar
                 allVisibleSelected={bulkDelete.selection.isAllSelected(bulkDelete.visibleKeys)}
                 isDeleting={bulkDelete.isDeleting}
@@ -223,12 +243,14 @@ export function ImagesPage({
           </div>
         }
         description={
-          viewMode === "local"
-            ? "Browse local images, tags, and disk usage."
-            : "Search Docker Hub and configured registries, then pull images locally."
+          isUnifiedSearch
+            ? "Results from local images, connected registries, and related commands."
+            : viewMode === "local"
+              ? "Browse local images, tags, and disk usage."
+              : "Search Docker Hub and configured registries, then pull images locally."
         }
         errorMessage={combinedError}
-        isLoading={viewMode === "local" ? isLoading : isSearchingRegistry}
+        isLoading={!isUnifiedSearch && viewMode === "local" ? isLoading : !isUnifiedSearch && isSearchingRegistry}
         footerStatusLabel={footerStatusLabel}
         title="Images"
       >
@@ -247,7 +269,173 @@ export function ImagesPage({
           </div>
         ) : null}
 
-        {viewMode === "local" ? (
+        {isUnifiedSearch ? (
+          <div className="min-h-0 flex-1 space-y-8 overflow-auto p-4 sm:p-6">
+            <section aria-labelledby="images-local-heading">
+              <h2
+                className="text-sm font-semibold uppercase tracking-wide text-(--text-muted)"
+                id="images-local-heading"
+              >
+                Local images
+              </h2>
+              {isLoading ? (
+                <PageLoadingSkeleton />
+              ) : filteredImages.length === 0 ? (
+                <p className="mt-3 text-sm text-(--text-secondary)">No local images match this search.</p>
+              ) : (
+                <div className="mt-3 overflow-auto rounded-xl border border-(--border)">
+                  <table className="w-full min-w-[720px] border-collapse text-sm">
+                    <thead className="bg-(--surface)">
+                      <tr className="border-b border-(--border) text-left text-(--text-muted)">
+                        <th className="w-10 px-4 py-3 font-medium sm:px-6">
+                          <ResourceSelectionHeaderCheckbox
+                            allSelected={bulkDelete.selection.isAllSelected(bulkDelete.visibleKeys)}
+                            partiallySelected={bulkDelete.selection.isPartiallySelected(bulkDelete.visibleKeys)}
+                            onToggleAll={bulkDelete.toggleSelectAllVisible}
+                          />
+                        </th>
+                        <th className="px-4 py-3 font-medium sm:px-6">Repository</th>
+                        <th className="px-3 py-3 font-medium">Tag</th>
+                        <th className="px-3 py-3 font-medium">Image ID</th>
+                        <th className="px-3 py-3 font-medium">Size</th>
+                        <th className="px-3 py-3 font-medium">Created</th>
+                        <th className="px-3 py-3 font-medium">Containers</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredImages.map((image) => {
+                        const selected = bulkDelete.selection.isSelected(image.id);
+
+                        return (
+                          <tr
+                            className={`border-b border-(--border) transition ${
+                              selected ? "bg-(--accent-soft)" : "hover:bg-(--surface-hover)"
+                            }`}
+                            key={image.id}
+                          >
+                            <td className="px-4 py-3 sm:px-6">
+                              <ResourceSelectionRowCheckbox
+                                checked={selected}
+                                label={`${image.repository}:${image.tag}`}
+                                onToggle={() => bulkDelete.selection.toggle(image.id)}
+                              />
+                            </td>
+                            <td className="px-4 py-3 font-medium text-(--text-primary) sm:px-6">{image.repository}</td>
+                            <td className="px-3 py-3 text-(--text-secondary)">{image.tag}</td>
+                            <td className="px-3 py-3 font-mono text-xs text-(--text-muted)">{image.shortId}</td>
+                            <td className="px-3 py-3 text-(--text-secondary)">{image.size}</td>
+                            <td className="whitespace-nowrap px-3 py-3 text-(--text-secondary)">{image.createdAt}</td>
+                            <td className="px-3 py-3 text-(--text-secondary)">
+                              {image.containers < 0 ? "—" : image.containers}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </section>
+
+            <section aria-labelledby="images-registry-heading">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <h2
+                  className="text-sm font-semibold uppercase tracking-wide text-(--text-muted)"
+                  id="images-registry-heading"
+                >
+                  Registry images
+                </h2>
+                {registryFilter}
+              </div>
+              {isSearchingRegistry && registryResults.length === 0 ? (
+                <p className="mt-3 text-sm text-(--text-muted)">Searching registries…</p>
+              ) : registryResults.length === 0 ? (
+                <p className="mt-3 text-sm text-(--text-secondary)">
+                  {registryMessage ?? "No registry images match this search."}
+                </p>
+              ) : (
+                <div className="mt-3 overflow-auto rounded-xl border border-(--border)">
+                  {registryMessage ? <p className={`px-4 py-2 text-xs ${alertWarning}`}>{registryMessage}</p> : null}
+                  <table className="w-full min-w-[720px] border-collapse text-sm">
+                    <thead className="bg-(--surface)">
+                      <tr className="border-b border-(--border) text-left text-(--text-muted)">
+                        <th className="px-4 py-3 font-medium sm:px-6">Name</th>
+                        <th className="px-3 py-3 font-medium">Registry</th>
+                        <th className="px-3 py-3 font-medium">Description</th>
+                        <th className="px-3 py-3 font-medium">Stars</th>
+                        <th className="px-3 py-3 font-medium">Pull</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {registryResults.map((result) => (
+                        <tr
+                          className="border-b border-(--border) transition hover:bg-(--surface-hover)"
+                          key={`${result.registryId}-${result.pullReference}`}
+                        >
+                          <td className="px-4 py-3 font-medium text-(--text-primary) sm:px-6">
+                            {result.name}
+                            {result.isOfficial ? (
+                              <span className={`ml-2 rounded-full px-1.5 py-0.5 text-[0.65rem] ${statusBadgeSuccess}`}>
+                                Official
+                              </span>
+                            ) : null}
+                          </td>
+                          <td className="px-3 py-3 text-(--text-secondary)">{result.registryName}</td>
+                          <td className="max-w-md px-3 py-3 text-(--text-muted)">{result.description ?? "—"}</td>
+                          <td className="px-3 py-3 text-(--text-secondary)">{result.starCount ?? "—"}</td>
+                          <td className="px-3 py-3">
+                            <button
+                              className="rounded-md border border-(--border) px-2 py-1 text-xs text-(--text-primary) hover:bg-(--surface-hover) disabled:opacity-60"
+                              disabled={isPulling === result.pullReference}
+                              type="button"
+                              onClick={() => void handlePull(result.pullReference)}
+                            >
+                              {isPulling === result.pullReference ? "Pulling…" : "Pull"}
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </section>
+
+            {learnResults.length > 0 ? (
+              <section aria-labelledby="images-commands-heading">
+                <h2
+                  className="text-sm font-semibold uppercase tracking-wide text-(--text-muted)"
+                  id="images-commands-heading"
+                >
+                  Related commands
+                </h2>
+                <ul className="mt-3 space-y-2">
+                  {learnResults.map((result) => (
+                    <li key={result.id}>
+                      <button
+                        className="flex w-full items-start gap-3 rounded-lg border border-(--border) px-3 py-2 text-left transition hover:bg-(--surface-hover)"
+                        type="button"
+                        onClick={() => onSearchResultSelect?.(result)}
+                      >
+                        <span className="min-w-0 flex-1">
+                          <span className="block text-sm font-medium text-(--text-primary)">{result.title}</span>
+                          {result.subtitle ? (
+                            <span className="mt-0.5 block text-xs text-(--text-muted)">{result.subtitle}</span>
+                          ) : null}
+                        </span>
+                        <span
+                          className={`shrink-0 rounded-full border px-2 py-0.5 text-[0.65rem] font-medium ${statusBadgeInfo}`}
+                        >
+                          {result.badge}
+                        </span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            ) : null}
+          </div>
+        ) : viewMode === "local" ? (
           isLoading ? (
             <PageLoadingSkeleton />
           ) : filteredImages.length === 0 ? (
