@@ -1,3 +1,5 @@
+import { openUrl } from "@tauri-apps/plugin-opener";
+import { useState } from "react";
 import {
   getDockerCommand,
   riskLabels,
@@ -6,6 +8,8 @@ import {
 } from "../lib/docker-command-registry";
 import { type CommandSuggestion } from "../lib/docker-command-suggestions";
 import { riskBadgeClasses } from "../lib/theme-classes";
+
+const registryIssueUrl = "https://github.com/aiherrera/oxidock/issues/new";
 
 type CliCommandInspectorProps = {
   commandText: string;
@@ -25,6 +29,18 @@ const resolveDisplayMetadata = (
   return registryMatch;
 };
 
+const buildRegistryIssueUrl = (command: string) => {
+  const issueParams = new URLSearchParams({
+    template: "feature_request.yml",
+    title: `[feature]: Add ${command} to the curated Docker command registry`,
+    problem: `The command \`${command}\` is currently treated as a custom command in Oxidock, so users do not get curated guidance, risk metadata, examples, or related commands for it.`,
+    proposal: `Add \`${command}\` to the curated Docker command registry with an appropriate description, example, risk level, prerequisites, and related commands.`,
+    alternatives: "Continue running this as a custom command and checking the official Docker CLI reference manually.",
+  });
+
+  return `${registryIssueUrl}?${issueParams.toString()}`;
+};
+
 export function CliCommandInspector({
   commandText,
   focusedSuggestion,
@@ -34,6 +50,17 @@ export function CliCommandInspector({
 }: CliCommandInspectorProps) {
   const metadata = resolveDisplayMetadata(focusedSuggestion, registryMatch);
   const trimmed = commandText.trim();
+  const [issueOpenError, setIssueOpenError] = useState<string | null>(null);
+
+  const openRegistryIssue = async (command: string) => {
+    setIssueOpenError(null);
+
+    try {
+      await openUrl(buildRegistryIssueUrl(command));
+    } catch {
+      setIssueOpenError("Could not open GitHub. Restart Oxidock and try again.");
+    }
+  };
 
   if (!trimmed && !metadata) {
     return (
@@ -68,6 +95,23 @@ export function CliCommandInspector({
             <code className="block rounded-lg border border-(--border) bg-(--code-bg) px-3 py-2 font-mono text-xs text-(--code-text)">
               {trimmed}
             </code>
+          ) : null}
+          {trimmed ? (
+            <button
+              className="inline-flex rounded-lg border border-(--border) bg-(--surface-elevated) px-3 py-2 text-xs font-medium text-(--text-secondary) transition hover:border-(--accent) hover:text-(--text-primary)"
+              type="button"
+              onClick={() => void openRegistryIssue(trimmed)}
+            >
+              Request registry support on GitHub
+            </button>
+          ) : null}
+          {issueOpenError ? (
+            <p
+              className="rounded-lg border border-red-500/40 bg-red-500/10 px-3 py-2 text-xs text-red-200"
+              role="alert"
+            >
+              {issueOpenError}
+            </p>
           ) : null}
         </div>
       </div>

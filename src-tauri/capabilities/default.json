@@ -14,6 +14,9 @@
         },
         {
           "url": "https://hub.docker.com/**"
+        },
+        {
+          "url": "https://github.com/aiherrera/oxidock/issues/new*"
         }
       ]
     }
